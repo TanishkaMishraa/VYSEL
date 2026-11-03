@@ -23,8 +23,8 @@ DEFAULT_CODES = {
 class ApiError(Exception):
     """Raise from handlers: `raise ApiError(404, "NOT_FOUND", "Job not found")`."""
 
-    def __init__(self, status: int, code: str, detail: str | None = None) -> None:
-        self.status, self.code, self.detail = status, code, detail
+    def __init__(self, status: int, code: str, detail: str | None = None, retry_after: int | None = None) -> None:
+        self.status, self.code, self.detail, self.retry_after = status, code, detail, retry_after
 
 
 def problem(request: Request, status: int, code: str, detail: str | None = None, **extra) -> JSONResponse:
@@ -43,7 +43,10 @@ def problem(request: Request, status: int, code: str, detail: str | None = None,
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError):
-        return problem(request, exc.status, exc.code, exc.detail)
+        response = problem(request, exc.status, exc.code, exc.detail)
+        if exc.retry_after:
+            response.headers["Retry-After"] = str(exc.retry_after)
+        return response
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException):

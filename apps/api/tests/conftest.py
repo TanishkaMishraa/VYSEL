@@ -13,6 +13,12 @@ _tmp = Path(tempfile.mkdtemp(prefix="vysel-tests-"))
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{(_tmp / 'test.db').as_posix()}"
 os.environ["APP_ENV"] = "test"
 os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"
+os.environ["RATE_LIMIT_ENABLED"] = "false"  # enabled explicitly in test_ratelimit
+os.environ["PUBLIC_API_PREFIX"] = "/v1"  # TestClient calls the API directly (no Next.js proxy)
+os.environ["JWT_SECRET"] = "test-secret-" + "x" * 40
+os.environ["EMAIL_BACKEND"] = "console"
+os.environ["GOOGLE_CLIENT_ID"] = "test-client-id.apps.googleusercontent.com"
+os.environ["GOOGLE_CLIENT_SECRET"] = "test-client-secret"
 
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402
@@ -46,3 +52,32 @@ def client(monkeypatch):
 
     with TestClient(fastapi_app) as c:
         yield c
+
+
+@pytest.fixture
+def outbox(monkeypatch):
+    """Captures emails sent by the (eager) send_email task."""
+    sent = []
+    import app.email
+
+    monkeypatch.setattr(app.email, "send", lambda to, subject, text: sent.append({"to": to, "subject": subject, "text": text}))
+    return sent
+
+
+def unique_email() -> str:
+    import uuid
+
+    return f"user-{uuid.uuid4().hex[:10]}@example.com"
+
+
+@pytest.fixture
+def signup(client):
+    """Register a fresh user; returns (email, password, session_json)."""
+
+    def _signup(password: str = "correct-horse-battery", name: str = "Tanya"):
+        email = unique_email()
+        res = client.post("/v1/auth/register", json={"email": email, "password": password, "display_name": name})
+        assert res.status_code == 201, res.text
+        return email, password, res.json()
+
+    return _signup

@@ -3,6 +3,7 @@
 import logging
 import time
 
+from app import email
 from app.db import SessionLocal
 from app.models import BackgroundJob, JobStatus
 from app.worker import celery_app
@@ -35,3 +36,9 @@ def hello_world(self, job_id: str, name: str = "world", delay_seconds: float = 1
             job.error = f"{type(exc).__name__}: {exc}"
             db.commit()
             raise
+
+
+@celery_app.task(name="vysel.send_email", autoretry_for=(OSError,), retry_backoff=True, max_retries=5)
+def send_email(to: str, subject: str, text: str) -> None:
+    """Deliver one email; retried with backoff on network errors (SMTP down, timeouts)."""
+    email.send(to, subject, text)

@@ -3,6 +3,7 @@ import { Cinzel, Cormorant_Garamond, DM_Sans } from 'next/font/google';
 import '@vysel/ui/tokens.css';
 import '@vysel/ui/components.css';
 import './globals.css';
+import { AuthProvider } from '@/components/auth/AuthProvider';
 import { site } from '@/lib/site';
 
 // Self-hosted at build time: no runtime request to Google, no layout shift.
@@ -41,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a className="vy-skip-link" href="#main">
           Skip to content
         </a>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

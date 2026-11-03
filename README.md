@@ -22,10 +22,12 @@ Team Terrificers · PSIT Kanpur.
 
 | Path | What |
 |---|---|
-| `apps/web` | Next.js 14 landing page and app ([docs/landing-page.md](docs/landing-page.md)) |
-| `apps/api` | FastAPI + SQLAlchemy/Alembic + Celery worker |
+| `apps/web` | Next.js 14 landing page, dashboard, scan setup, onboarding and account settings ([docs/landing-page.md](docs/landing-page.md)) |
+| `apps/api` | FastAPI auth/profile API + SQLAlchemy/Alembic + Celery worker |
 | `packages/ui` | Design system: tokens, components, brand assets, showcase |
 | `docs/api/openapi.yaml` | API contract |
 | `.github/workflows/ci.yml` | Lint, tests, migrations, smoke test, web build |
 
 No Docker: everything runs natively.
+
+After signing up, users can complete `/onboarding`; their style goals, preferred occasions, budget and style preferences are saved to their profile. The signed-in app is available at `/dashboard`, with editable account and preference settings at `/settings`. `/scan` currently provides a local-only photo preview; upload and analysis are not available yet.
