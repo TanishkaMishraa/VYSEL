@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     cors_origins: str = ""
 
     # ── Auth ──
+    admin_emails: str = ""
     jwt_secret: str = INSECURE_DEV_SECRET
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 30
@@ -136,6 +137,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def admin_email_allowlist(self) -> frozenset[str]:
+        return frozenset(email.strip().lower() for email in self.admin_emails.split(",") if email.strip())
 
     @property
     def google_enabled(self) -> bool:

@@ -57,6 +57,7 @@ def to_profile(user: User) -> schemas.Profile:
         auth_providers=sorted({a.provider for a in user.oauth_accounts} | ({"password"} if user.password_hash else set())),
         preferences=schemas.Preferences.model_validate(prefs),
         onboarding_completed=prefs.onboarding_completed_at is not None,
+        is_admin=user.email.lower() in get_settings().admin_email_allowlist,
         created_at=user.created_at,
         updated_at=max(user.updated_at, prefs.updated_at) if prefs.updated_at else user.updated_at,
     )

@@ -92,6 +92,7 @@ class Profile(BaseModel):
     auth_providers: list[str]
     preferences: Preferences
     onboarding_completed: bool
+    is_admin: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -291,6 +292,69 @@ class SavedLookOut(BaseModel):
     look: SavedLookData
     created_at: datetime
     updated_at: datetime
+
+
+class AdminUserSummary(BaseModel):
+    id: str
+    email: EmailStr
+    display_name: str
+    email_verified: bool
+    created_at: datetime
+
+
+class AdminScanMetrics(BaseModel):
+    total: int
+    queued: int
+    running: int
+    succeeded: int
+    failed: int
+    model_versions: dict[str, dict[str, int]]
+
+
+class AdminFailure(BaseModel):
+    id: str
+    source: Literal["scan", "job"]
+    category: str
+    status: str
+    occurred_at: datetime
+
+
+class AdminFlaggedImage(BaseModel):
+    scan_id: str
+    image_id: str
+    status: str
+    model_version: str
+    error_code: str | None
+    quality_flags: list[str]
+    warning_codes: list[str]
+    created_at: datetime
+
+
+class AdminFeedbackMetric(BaseModel):
+    category: RecommendationCategory
+    helpful: int
+    not_helpful: int
+
+
+class AdminEvaluationStatus(BaseModel):
+    status: Literal["not_available", "available"]
+    accuracy: float | None = None
+    macro_f1: float | None = None
+    sample_count: int
+    message: str
+
+
+class AdminOverview(BaseModel):
+    generated_at: datetime
+    registered_users: int
+    recent_users: list[AdminUserSummary]
+    analyses: int
+    scans: AdminScanMetrics
+    feedback_total: int
+    feedback: list[AdminFeedbackMetric]
+    flagged_images: list[AdminFlaggedImage]
+    system_failures: list[AdminFailure]
+    model_evaluation: AdminEvaluationStatus
 
 
 class AuthSession(BaseModel):

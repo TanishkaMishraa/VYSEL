@@ -24,6 +24,7 @@ export function AppShell({ children, narrow }: { children: ReactNode; narrow?: b
               { href: '/scan', label: 'New scan' },
               { href: '/try-on', label: 'Try-on' },
               { href: '/settings', label: 'Settings' },
+              ...(user?.is_admin ? [{ href: '/admin', label: 'Admin' }] : []),
             ].map((item) => (
               <Link key={item.href} href={item.href} className="vy-nav__link" aria-current={pathname === item.href ? 'page' : undefined}>
                 {item.label}

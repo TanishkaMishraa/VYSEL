@@ -13,6 +13,7 @@ export interface Profile {
   auth_providers: string[];
   preferences: Preferences;
   onboarding_completed: boolean;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
 }

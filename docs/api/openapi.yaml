@@ -54,6 +54,8 @@ tags:
     description: Single-face detection, landmarks and facial regions for an uploaded selfie (Phase 4.2).
   - name: Analyses
     description: Asynchronous Style DNA analysis jobs and their results.
+  - name: Admin
+    description: Allowlist-protected operational metrics; no private image content.
 
 security:
   - bearerAuth: []
@@ -810,6 +812,26 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /admin/overview:
+    get:
+      tags: [Admin]
+      operationId: getAdminOverview
+      summary: Read operational dashboard metrics
+      description: Requires an authenticated account whose email is configured in the server-side ADMIN_EMAILS allowlist.
+      responses:
+        '200':
+          description: Aggregated account, scan, failure, feedback and evaluation metrics.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminOverview' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403':
+          description: The authenticated account is not allowlisted for administrator access.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1089,14 +1111,94 @@ components:
           items: { $ref: '#/components/schemas/Category' }
     Profile:
       type: object
-      required: [id, email, display_name, preferences, created_at, updated_at]
+      required: [id, email, display_name, preferences, is_admin, created_at, updated_at]
       properties:
         id: { $ref: '#/components/schemas/UserId' }
         email: { $ref: '#/components/schemas/Email' }
         display_name: { $ref: '#/components/schemas/DisplayName' }
         preferences: { $ref: '#/components/schemas/Preferences' }
+        is_admin:
+          type: boolean
+          description: True only when the authenticated user's email is in the server-side administrator allowlist.
         created_at: { $ref: '#/components/schemas/Timestamp' }
         updated_at: { $ref: '#/components/schemas/Timestamp' }
+    AdminOverview:
+      type: object
+      required: [generated_at, registered_users, recent_users, analyses, scans, feedback_total, feedback, flagged_images, system_failures, model_evaluation]
+      properties:
+        generated_at: { $ref: '#/components/schemas/Timestamp' }
+        registered_users: { type: integer, minimum: 0 }
+        recent_users:
+          type: array
+          items:
+            type: object
+            required: [id, email, display_name, email_verified, created_at]
+            properties:
+              id: { $ref: '#/components/schemas/UserId' }
+              email: { $ref: '#/components/schemas/Email' }
+              display_name: { $ref: '#/components/schemas/DisplayName' }
+              email_verified: { type: boolean }
+              created_at: { $ref: '#/components/schemas/Timestamp' }
+        analyses: { type: integer, minimum: 0 }
+        scans:
+          type: object
+          required: [total, queued, running, succeeded, failed, model_versions]
+          properties:
+            total: { type: integer, minimum: 0 }
+            queued: { type: integer, minimum: 0 }
+            running: { type: integer, minimum: 0 }
+            succeeded: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0 }
+            model_versions:
+              type: object
+              additionalProperties:
+                type: object
+                additionalProperties: { type: integer, minimum: 0 }
+        feedback_total: { type: integer, minimum: 0 }
+        feedback:
+          type: array
+          items:
+            type: object
+            required: [category, helpful, not_helpful]
+            properties:
+              category: { type: string, enum: [hair, eyewear, makeup, outfit_color, outfit_cut] }
+              helpful: { type: integer, minimum: 0 }
+              not_helpful: { type: integer, minimum: 0 }
+        flagged_images:
+          type: array
+          description: Metadata only; image bytes and biometric scan payloads are not included.
+          items:
+            type: object
+            required: [scan_id, image_id, status, model_version, quality_flags, warning_codes, created_at]
+            properties:
+              scan_id: { type: string }
+              image_id: { type: string }
+              status: { type: string }
+              model_version: { type: string }
+              error_code: { type: [string, 'null'] }
+              quality_flags: { type: array, items: { type: string } }
+              warning_codes: { type: array, items: { type: string } }
+              created_at: { $ref: '#/components/schemas/Timestamp' }
+        system_failures:
+          type: array
+          items:
+            type: object
+            required: [id, source, category, status, occurred_at]
+            properties:
+              id: { type: string }
+              source: { type: string, enum: [scan, job] }
+              category: { type: string }
+              status: { type: string }
+              occurred_at: { $ref: '#/components/schemas/Timestamp' }
+        model_evaluation:
+          type: object
+          required: [status, accuracy, macro_f1, sample_count, message]
+          properties:
+            status: { type: string, enum: [not_available, available] }
+            accuracy: { type: [number, 'null'], minimum: 0, maximum: 1 }
+            macro_f1: { type: [number, 'null'], minimum: 0, maximum: 1 }
+            sample_count: { type: integer, minimum: 0 }
+            message: { type: string }
     ProfileUpdate:
       type: object
       additionalProperties: false

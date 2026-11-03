@@ -18,3 +18,12 @@ def current_user(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), 
     if user is None:
         raise ApiError(401, "UNAUTHENTICATED", "Access token is missing or expired.")
     return user
+
+
+def admin_user(user: User = Depends(current_user)) -> User:
+    """Require the configured email allowlist; never trust a client-supplied role."""
+    from app.config import get_settings
+
+    if user.email.lower() not in get_settings().admin_email_allowlist:
+        raise ApiError(403, "ADMIN_REQUIRED", "Administrator access is required.")
+    return user
