@@ -22,8 +22,8 @@ Team Terrificers · PSIT Kanpur.
 
 | Path | What |
 |---|---|
-| `apps/web` | Next.js 14 landing page, dashboard, scan-to-report setup, Style DNA reports and account settings ([docs/landing-page.md](docs/landing-page.md)) |
-| `apps/api` | FastAPI auth/profile/recommendation/report API + SQLAlchemy/Alembic + Celery worker |
+| `apps/web` | Next.js 14 landing page, dashboard, scan-to-report flow, Style DNA reports, virtual try-on and account settings ([docs/landing-page.md](docs/landing-page.md), [docs/virtual-try-on.md](docs/virtual-try-on.md)) |
+| `apps/api` | FastAPI auth/profile, selfie upload ([IMAGE_UPLOAD.md](apps/api/IMAGE_UPLOAD.md)), face detection and landmarks ([FACE_ANALYSIS.md](apps/api/FACE_ANALYSIS.md)), skin analysis ([SKIN_ANALYSIS.md](apps/api/SKIN_ANALYSIS.md)), recommendations/reports, SQLAlchemy/Alembic and Celery worker |
 | `packages/ui` | Design system: tokens, components, brand assets, showcase |
 | `docs/api/openapi.yaml` | API contract |
 | `docs/recommendations.md` | Recommendation mapping and scoring rules |
@@ -31,4 +31,4 @@ Team Terrificers · PSIT Kanpur.
 
 No Docker: everything runs natively.
 
-After signing up, users can complete `/onboarding`; their style goals, preferred occasions, budget and style preferences are saved to their profile. The signed-in app is available at `/dashboard`, with editable account and preference settings at `/settings`. On `/scan`, users select their own feature estimates to generate and save recommendations; the optional photo preview stays in-browser and is never uploaded or analyzed. Reports are private by default, with opt-in revocable links, per-recommendation feedback, and print-to-PDF export. Automated selfie analysis is not implemented.
+After signing up, users can complete `/onboarding`; their style goals, preferred occasions, budget and style preferences are saved to their profile. The signed-in app is available at `/dashboard`, with editable account and preference settings at `/settings`. On `/scan`, users can upload a consented selfie for face and skin analysis before generating recommendations. Reports are private by default, with opt-in revocable links, per-recommendation feedback, and print-to-PDF export. Virtual try-on runs locally in the browser.

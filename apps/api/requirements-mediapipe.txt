@@ -1,0 +1,9 @@
+# MediaPipe for face detection and landmarks (Phase 4.2). Install WITHOUT dependencies:
+#
+#   python -m pip install --no-deps -r requirements-mediapipe.txt
+#
+# (scripts/setup_face_analysis.py does this for you). Its declared dependencies include
+# opencv-contrib-python, the GUI build of OpenCV, which conflicts with opencv-python-headless,
+# and sounddevice, used only by the audio tasks. The packages the vision tasks need are pinned
+# in requirements.txt.
+mediapipe==1.2.0

@@ -5,14 +5,23 @@ Docs:                 http://localhost:8000/docs
 """
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import auth, health, images, jobs, me, recommendations, reports
+from app.api import auth, health, images, jobs, me, recommendations, reports, scans
 from app.config import get_settings
 from app.errors import register_error_handlers
+from app.services.face_analysis import close_face_analyzer
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    yield
+    close_face_analyzer()  # Release MediaPipe graphs (the model loads lazily on the first scan).
 
 
 def create_app() -> FastAPI:
@@ -24,6 +33,7 @@ def create_app() -> FastAPI:
         version=__version__,
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,
+        lifespan=lifespan,
     )
     if settings.cors_origin_list:
         app.add_middleware(
@@ -37,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(images.router, prefix="/v1")
     app.include_router(recommendations.router, prefix="/v1")
     app.include_router(reports.router, prefix="/v1")
+    app.include_router(scans.router, prefix="/v1")
     return app
 
 

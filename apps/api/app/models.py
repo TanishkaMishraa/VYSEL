@@ -60,6 +60,7 @@ class User(TimestampMixin, Base):
 
     preferences: Mapped["UserPreferences"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    face_scans: Mapped[list["FaceScan"]] = relationship(cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -143,7 +144,8 @@ class ImageUpload(TimestampMixin, Base):
     consent_policy_version: Mapped[str] = mapped_column(String(32), nullable=False)
     retention: Mapped[str] = mapped_column(String(16), default="ephemeral", nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
+    # Scans contain derived biometric data and are erased with their source image.
+    face_scans: Mapped[list["FaceScan"]] = relationship(cascade="all, delete-orphan")
 
 class RecommendationReport(Base):
     """Account-owned snapshot of estimates and ranked suggestions."""
@@ -169,3 +171,24 @@ class RecommendationFeedback(Base):
     recommendation_id: Mapped[str] = mapped_column(String(100), nullable=False)
     helpful: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class FaceScan(TimestampMixin, Base):
+    """Face detection + landmark extraction for one uploaded image (Phase 4.2).
+
+    Landmarks are biometric data: a scan lives no longer than its image (`expires_at` is copied
+    from it, and rows are deleted with the image or the account).
+    """
+
+    __tablename__ = "face_scans"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("scn"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    image_id: Mapped[str] = mapped_column(ForeignKey("image_uploads.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)  # succeeded | failed
+    error_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    face_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    detection_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    model_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[dict] = mapped_column(JSON, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

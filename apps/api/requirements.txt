@@ -14,3 +14,9 @@ httpx==0.28.1
 python-multipart==0.0.20
 Pillow==11.1.0
 opencv-python-headless==4.10.0.84
+# Face detection/landmarks (Phase 4.2). MediaPipe itself is pinned in requirements-mediapipe.txt
+# and installed with --no-deps, because it requires the GUI build of OpenCV, which conflicts with
+# opencv-python-headless above. These are the dependencies its vision tasks actually import.
+absl-py==2.5.1
+flatbuffers==25.12.19
+matplotlib==3.11.2

@@ -81,3 +81,22 @@ def signup(client):
         return email, password, res.json()
 
     return _signup
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "mediapipe"
+
+
+@pytest.fixture(scope="session")
+def face_analyzer():
+    """The real MediaPipe analyzer. Skips when the model is not set up, unless REQUIRE_FACE_MODEL=1 (CI)."""
+    from app.config import Settings
+    from app.services.face_analysis import FaceAnalyzer, FaceModelUnavailable
+
+    try:
+        analyzer = FaceAnalyzer(Settings(_env_file=None))
+    except FaceModelUnavailable as exc:
+        if os.environ.get("REQUIRE_FACE_MODEL") == "1":
+            pytest.fail(str(exc))
+        pytest.skip(f"{exc} (set REQUIRE_FACE_MODEL=1 to make this a failure)")
+    yield analyzer
+    analyzer.close()

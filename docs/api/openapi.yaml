@@ -48,6 +48,8 @@ tags:
     description: Private account-owned recommendation snapshots, explicit revocable sharing and recommendation feedback.
   - name: Images
     description: Consent-gated, direct-to-storage selfie uploads.
+  - name: Scans
+    description: Single-face detection, landmarks and facial regions for an uploaded selfie (Phase 4.2).
   - name: Analyses
     description: Asynchronous Style DNA analysis jobs and their results.
 
@@ -338,10 +340,89 @@ paths:
       operationId: deleteImage
       summary: Delete an image immediately
       description: |
-        Removes the stored object. Analyses and results derived from the image are
-        kept (they contain no pixels). Idempotent.
+        Removes the stored object. Face scans of the image (landmarks are biometric data)
+        are deleted with it. Analyses and results derived from the image are kept (they
+        contain no pixels). Idempotent.
       responses:
         '204': { description: Deleted. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ─────────────────────────────── Scans ──────────────────────────────────
+  /scans:
+    post:
+      tags: [Scans]
+      operationId: createFaceScan
+      summary: Detect one face and extract landmarks and facial regions
+      description: |
+        Synchronous. The stored image is re-validated with the current upload quality rules,
+        then MediaPipe checks for exactly one face and returns its 478 landmarks, facial
+        regions (cheeks, forehead, chin, jawline, face oval) and key points. Rejections are
+        stored as `failed` scans and returned inside the problem body as `scan`.
+        Details: apps/api/FACE_ANALYSIS.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [image_id]
+              properties:
+                image_id: { type: string, maxLength: 40 }
+      responses:
+        '201':
+          description: One face found.
+          headers:
+            Location:
+              description: URL of the scan.
+              schema: { type: string, format: uri-reference }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FaceScan' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410':
+          description: '`UPLOAD_EXPIRED`: the image passed its retention window.'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: |
+            `NO_FACE_DETECTED`, `MULTIPLE_FACES_DETECTED` or `FACE_LANDMARKS_NOT_FOUND` (the body
+            adds `scan`, a FaceScan with status `failed`), or an upload validation code such as
+            `IMAGE_QUALITY_FAILED`.
+          content:
+            application/problem+json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/Problem' }
+                  - type: object
+                    properties:
+                      scan: { $ref: '#/components/schemas/FaceScan' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503':
+          description: '`FACE_ANALYSIS_UNAVAILABLE`: the face model is not installed on the server.'
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /scans/{scan_id}:
+    parameters:
+      - name: scan_id
+        in: path
+        required: true
+        schema: { type: string, pattern: '^scn_[0-9a-f]{32}$' }
+    get:
+      tags: [Scans]
+      operationId: getFaceScan
+      summary: Get a face scan
+      responses:
+        '200':
+          description: The scan (succeeded or failed).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FaceScan' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -840,6 +921,10 @@ components:
         - RATE_LIMITED
         - SERVICE_UNAVAILABLE
         - INTERNAL_ERROR
+        - NO_FACE_DETECTED
+        - MULTIPLE_FACES_DETECTED
+        - FACE_LANDMARKS_NOT_FOUND
+        - FACE_ANALYSIS_UNAVAILABLE
 
     # ── System ──
     Health:
@@ -1017,6 +1102,212 @@ components:
         image: { $ref: '#/components/schemas/Image' }
         upload: { $ref: '#/components/schemas/UploadInstructions' }
 
+    # ── Scans ──
+    Point2D:
+      type: array
+      items: { type: number }
+      minItems: 2
+      maxItems: 2
+      description: '[x, y] in pixels of the EXIF-oriented image.'
+    PixelBox:
+      type: object
+      required: [x, y, width, height]
+      properties:
+        x: { type: number }
+        y: { type: number }
+        width: { type: number }
+        height: { type: number }
+    FaceRegion:
+      type: object
+      required: [kind, landmark_indices, in_frame_ratio, bounding_box, centroid]
+      properties:
+        kind: { type: string, enum: [area, contour] }
+        landmark_indices: { type: array, items: { type: integer, minimum: 0, maximum: 477 } }
+        in_frame_ratio: { type: number, minimum: 0, maximum: 1 }
+        bounding_box: { $ref: '#/components/schemas/PixelBox' }
+        centroid: { $ref: '#/components/schemas/Point2D' }
+        polygon:
+          type: array
+          items: { $ref: '#/components/schemas/Point2D' }
+          description: Area regions (convex hull).
+        area_px: { type: number }
+        polyline:
+          type: array
+          items: { $ref: '#/components/schemas/Point2D' }
+          description: Contours, in order.
+        closed: { type: boolean }
+        visible: { type: boolean, description: Area regions only; false when out of frame or turned away. }
+    FaceScan:
+      type: object
+      required: [id, image_id, status, face_count, warnings, validation, model, created_at, expires_at]
+      properties:
+        id: { type: string, pattern: '^scn_[0-9a-f]{32}$' }
+        image_id: { type: string }
+        status: { type: string, enum: [succeeded, failed] }
+        face_count: { type: integer, minimum: 0 }
+        detection:
+          type: object
+          properties:
+            confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+            bounding_box: { oneOf: [{ $ref: '#/components/schemas/PixelBox' }, { type: 'null' }] }
+        image:
+          type: object
+          properties:
+            width: { type: integer }
+            height: { type: integer }
+            orientation_corrected: { type: boolean }
+            rotation_applied_degrees: { type: integer, enum: [0, 90, 180, 270] }
+        landmarks:
+          type: object
+          properties:
+            count: { type: integer, const: 478 }
+            topology: { type: string, const: mediapipe-face-mesh-478 }
+            coordinate_space: { type: string }
+            points:
+              type: array
+              items:
+                type: object
+                required: [index, x, y, z, px, py]
+                properties:
+                  index: { type: integer }
+                  x: { type: number, description: 'Normalized by image width; may leave [0, 1] at the frame edge.' }
+                  y: { type: number, description: Normalized by image height. }
+                  z: { type: number, description: Relative depth on the same scale as x; smaller is closer. }
+                  px: { type: number }
+                  py: { type: number }
+        regions:
+          type: object
+          description: forehead, left_cheek, right_cheek, chin (areas); jawline, face_oval (contours). Left/right are the subject's.
+          additionalProperties: { $ref: '#/components/schemas/FaceRegion' }
+        key_points:
+          type: object
+          description: forehead_top, chin_bottom, nose_tip, left/right_face_edge, left/right_jaw_angle.
+          additionalProperties:
+            type: object
+            properties:
+              index: { type: integer }
+              x: { type: number }
+              y: { type: number }
+              px: { type: number }
+              py: { type: number }
+        head_pose:
+          type: object
+          properties:
+            pitch: { type: number }
+            yaw: { type: number }
+            roll: { type: number }
+        skin: { $ref: '#/components/schemas/SkinAnalysis' }
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum:
+                  - LOW_DETECTION_CONFIDENCE
+                  - FACE_LOW_RESOLUTION
+                  - FACE_PARTIALLY_OUT_OF_FRAME
+                  - HIGH_HEAD_ROTATION
+                  - IMAGE_ROTATED_FOR_DETECTION
+                  - REGION_NOT_VISIBLE
+              message: { type: string }
+        error:
+          type: object
+          properties:
+            code: { type: string, enum: [NO_FACE_DETECTED, MULTIPLE_FACES_DETECTED, FACE_LANDMARKS_NOT_FOUND] }
+            message: { type: string }
+        validation: { type: object, description: Upload quality checks (resolution, blur, brightness, exposure). }
+        model:
+          type: object
+          properties:
+            name: { type: string, examples: [mediapipe-face-landmarker/float16/1] }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
+
+    SkinAnalysis:
+      type: object
+      description: |
+        Skin tone and undertone (Phase 4.3). Present on succeeded scans. `status: unavailable`
+        (codes NO_VISIBLE_SKIN, INSUFFICIENT_SKIN_PIXELS) does not fail the scan.
+        Details: apps/api/SKIN_ANALYSIS.md.
+      required: [status, warnings]
+      properties:
+        status: { type: string, enum: [ok, unavailable] }
+        skin_tone:
+          allOf:
+            - { $ref: '#/components/schemas/SkinTone' }
+            - type: object
+              properties:
+                ita_degrees: { type: number, description: Individual Typology Angle (Chardon et al., 1991). }
+                ita_category: { type: string, enum: [very_light, light, intermediate, tan, brown, dark] }
+                monk:
+                  type: object
+                  properties:
+                    value: { type: integer, minimum: 1, maximum: 10 }
+                    hex: { $ref: '#/components/schemas/HexColor' }
+                    delta_e: { type: number, description: CIEDE2000 distance to the swatch. }
+        undertone:
+          allOf:
+            - { $ref: '#/components/schemas/UndertoneEstimate' }
+            - type: object
+              properties:
+                method: { type: string, examples: [cielab-hue-v1] }
+                hue_angle: { type: number }
+                chroma: { type: number }
+                reference_hue: { type: number }
+                delta_h: { type: number, description: 'Signed perceptual hue difference from the neutral reference; + yellower, - pinker.' }
+        color_correction:
+          type: object
+          properties:
+            method: { type: string, enum: [shades_of_gray, none] }
+            gains: { type: object, additionalProperties: { type: number } }
+            clamped: { type: boolean }
+            applied: { type: boolean }
+            reference_pixels: { type: integer }
+        clusters:
+          type: array
+          items:
+            type: object
+            properties:
+              lab: { type: object, properties: { l: { type: number }, a: { type: number }, b: { type: number } } }
+              hex: { $ref: '#/components/schemas/HexColor' }
+              share: { type: number }
+              used: { type: boolean }
+        regions:
+          type: object
+          additionalProperties:
+            type: object
+            required: [used, pixels]
+            properties:
+              used: { type: boolean }
+              pixels: { type: integer }
+              reason: { type: string, enum: [not_visible, too_few_pixels, color_inconsistent] }
+              hex: { $ref: '#/components/schemas/HexColor' }
+              delta_e_from_consensus: { type: number }
+        pixels_used: { type: integer }
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum:
+                  - STRONG_COLOR_CAST
+                  - WHITE_BALANCE_LIMITED
+                  - REGION_COLOR_INCONSISTENT
+                  - UNDERTONE_REGIONS_DISAGREE
+                  - LOW_CONFIDENCE_UNDERTONE
+              message: { type: string }
+        error:
+          type: object
+          properties:
+            code: { type: string, enum: [NO_VISIBLE_SKIN, INSUFFICIENT_SKIN_PIXELS] }
+            message: { type: string }
+
     # ── Analyses ──
     CreateAnalysisRequest:
       type: object
@@ -1049,7 +1340,7 @@ components:
         - IMAGE_OVEREXPOSED
         - IMAGE_BLURRY
         - NO_FACE_DETECTED
-        - MULTIPLE_FACES
+        - MULTIPLE_FACES_DETECTED
         - FACE_TOO_SMALL
         - FACE_NOT_FRONTAL
         - FACE_OCCLUDED
@@ -1140,7 +1431,7 @@ components:
         hex: { $ref: '#/components/schemas/HexColor' }
         lab:
           type: object
-          description: CIE L*a*b* of the dominant skin cluster.
+          description: CIE L*a*b* (D65) skin colour, the share-weighted mean of the KMeans skin clusters after colour correction.
           required: [l, a, b]
           properties:
             l: { type: number, minimum: 0, maximum: 100 }

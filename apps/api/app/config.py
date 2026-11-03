@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 API_DIR = Path(__file__).resolve().parents[1]
@@ -55,6 +55,39 @@ class Settings(BaseSettings):
     selfie_max_bright_pixel_ratio: float = Field(default=0.75, ge=0, le=1)
     selfie_upload_chunk_bytes: int = Field(default=64 * 1024, ge=1024)
 
+    # ── Face detection and landmarks (MediaPipe, Phase 4.2) ──
+    # Defaults are MediaPipe's documented defaults or geometric rationale (docs: FACE_ANALYSIS.md),
+    # not values tuned on photos. Re-tune only on the validation split of a consented dataset.
+    face_model_path: Path = API_DIR / "models" / "face_landmarker.task"
+    face_min_detection_confidence: float = Field(default=0.5, ge=0, le=1)
+    face_min_presence_confidence: float = Field(default=0.5, ge=0, le=1)
+    face_max_faces_counted: int = Field(default=4, ge=2, le=10)
+    face_low_confidence_warning: float = Field(default=0.7, ge=0, le=1)
+    face_min_face_width_px: int = Field(default=128, ge=16)
+    face_max_inference_side: int = Field(default=1920, ge=256)
+    face_rotation_search: bool = True
+    face_max_yaw_degrees: float = Field(default=25, gt=0, le=90)
+    face_max_pitch_degrees: float = Field(default=20, gt=0, le=90)
+    face_max_roll_degrees: float = Field(default=20, gt=0, le=180)
+    face_min_in_frame_ratio: float = Field(default=0.95, ge=0, le=1)
+    face_min_side_width_ratio: float = Field(default=0.5, gt=0, le=1)
+
+    # ── Skin colour and undertone (Phase 4.3) ──
+    # Method constants, not values tuned on photos; see SKIN_ANALYSIS.md before changing any.
+    skin_white_balance: Literal["shades_of_gray", "none"] = "shades_of_gray"
+    skin_wb_minkowski_p: float = Field(default=6.0, ge=1, le=20)
+    skin_wb_max_gain: float = Field(default=1.5, gt=1, le=4)
+    skin_mask_erosion_ratio: float = Field(default=0.03, ge=0, le=0.2)
+    skin_min_pixels_per_region: int = Field(default=50, ge=1)
+    skin_min_pixels: int = Field(default=300, ge=10)
+    skin_kmeans_clusters: int = Field(default=3, ge=1, le=8)
+    skin_kmeans_seed: int = 0
+    skin_region_max_delta_e: float = Field(default=10.0, gt=0)
+    skin_undertone_reference_hue: float = Field(default=55.0, ge=0, lt=360)
+    skin_undertone_neutral_delta_h: float = Field(default=2.5, gt=0)
+    # Optional JSON {"points": [[L*, hue], ...]} fitted on validation data by scripts/evaluate_skin.py.
+    skin_undertone_reference_path: Path | None = None
+
     # ── Google OAuth (optional — the button hides itself when unset) ──
     google_client_id: str = ""
     google_client_secret: str = ""
@@ -66,6 +99,12 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
+
+    @field_validator("face_model_path")
+    @classmethod
+    def _resolve_model_path(cls, value: Path) -> Path:
+        # Relative paths are relative to apps/api, whatever directory the server starts in.
+        return value if value.is_absolute() else API_DIR / value
 
     @model_validator(mode="after")
     def _production_safety(self) -> "Settings":

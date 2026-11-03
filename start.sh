@@ -60,6 +60,8 @@ if [ ! -f "$API/.env" ]; then
 fi
 ok "$API/.env present"
 
+"$PY" "$API/scripts/setup_face_analysis.py" || fail "Face analysis setup failed (MediaPipe + model, see above)."
+
 PORTS="8000"; [ "$NO_WEB" = 1 ] || PORTS="8000 3000"
 for port in $PORTS; do
   if command -v lsof >/dev/null && lsof -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then

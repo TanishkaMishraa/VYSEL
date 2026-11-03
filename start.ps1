@@ -64,6 +64,8 @@ if (-not (Test-Path (Join-Path $Api '.env'))) {
 }
 Ok 'apps/api/.env present'
 
+& $Py (Join-Path $Api 'scripts\setup_face_analysis.py'); if ($LASTEXITCODE) { Fail 'Face analysis setup failed (MediaPipe + model, see above).' }
+
 $ports = @(8000) + $(if (-not $NoWeb) { 3000 } else { @() })
 foreach ($port in $ports) {
   $owner = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1

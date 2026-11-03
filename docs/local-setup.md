@@ -64,14 +64,21 @@ npm install                                   # frontend + design system (worksp
 python3.11 -m venv apps/api/.venv             # Windows: py -3.11 -m venv apps/api/.venv
 # activate — Windows: apps\api\.venv\Scripts\Activate.ps1   macOS/Linux: source apps/api/.venv/bin/activate
 python -m pip install -r apps/api/requirements-dev.txt
+python apps/api/scripts/setup_face_analysis.py  # MediaPipe + face model (~3.7 MB, SHA-256 verified)
 ```
+
+`start.ps1` / `start.sh` run the face setup step on every start (it does nothing when up to date), so
+existing virtualenvs pick up MediaPipe automatically. MediaPipe is installed with `--no-deps` from
+`apps/api/requirements-mediapipe.txt` because it otherwise pulls in the GUI build of OpenCV, which
+conflicts with `opencv-python-headless`.
 
 | File | Contents |
 |---|---|
 | `package.json` (root) | npm workspaces, scripts, `engines: node >=20 <23` |
 | `apps/web/package.json` | Next.js 14, React 18, Tailwind |
-| `apps/api/requirements.txt` | FastAPI, Uvicorn, SQLAlchemy 2, Alembic, psycopg 3, Redis, Celery, pydantic-settings |
+| `apps/api/requirements.txt` | FastAPI, Uvicorn, SQLAlchemy 2, Alembic, psycopg 3, Redis, Celery, pydantic-settings, Pillow/OpenCV, MediaPipe runtime deps |
 | `apps/api/requirements-dev.txt` | + pytest, ruff |
+| `apps/api/requirements-mediapipe.txt` | MediaPipe (face detection/landmarks), installed with `--no-deps` |
 
 ## 3. Create the database and user
 
