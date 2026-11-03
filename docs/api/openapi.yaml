@@ -624,6 +624,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Report' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
     get:
       tags: [Reports]
@@ -1682,6 +1683,12 @@ components:
       required: [features]
       properties:
         features: { $ref: '#/components/schemas/RecommendationFeatures' }
+        scan_id:
+          type: string
+          maxLength: 40
+          description: >-
+            The succeeded `scn_` face scan the features were estimated from. Omit when they were entered by hand.
+            Recorded on the report's analysis result; an unknown or failed scan returns 404.
     Report:
       type: object
       required: [id, created_at, report_data, share_enabled, feedback]

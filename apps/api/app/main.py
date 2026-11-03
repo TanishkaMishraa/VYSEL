@@ -1,4 +1,4 @@
-﻿"""FastAPI application.
+"""FastAPI application.
 
 Run (from apps/api):  uvicorn app.main:app --reload --port 8000
 Docs:                 http://localhost:8000/docs
@@ -12,8 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import auth, health, images, jobs, me, recommendations, reports, scans
-from app.api import auth, health, images, jobs, me, recommendations, reports, saved_looks
+from app.api import auth, health, images, jobs, me, recommendations, reports, saved_looks, scans
 from app.config import get_settings
 from app.errors import register_error_handlers
 from app.services.face_analysis import close_face_analyzer

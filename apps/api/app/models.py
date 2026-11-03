@@ -1,21 +1,21 @@
-﻿"""ORM models."""
+"""ORM models."""
 
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, TimestampMixin, utcnow
 
 
 def prefixed_id(prefix: str):
-    """Opaque, prefixed IDs (usr_â€¦, job_â€¦) as specified in docs/api/openapi.yaml."""
+    """Opaque, prefixed IDs (usr_…, job_…) as specified in docs/api/openapi.yaml."""
     return lambda: f"{prefix}_{uuid.uuid4().hex}"
 
 
-# â”€â”€ Background jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Background jobs ─────────────────────────────────────────────────────────
 
 
 class JobStatus(str, enum.Enum):
@@ -45,7 +45,7 @@ class BackgroundJob(TimestampMixin, Base):
     celery_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
-# â”€â”€ Users & auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Users & auth ────────────────────────────────────────────────────────────
 
 
 class User(TimestampMixin, Base):
@@ -59,8 +59,13 @@ class User(TimestampMixin, Base):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     preferences: Mapped["UserPreferences"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
+    profile: Mapped["UserProfile | None"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    # These ORM cascades mirror the ON DELETE CASCADE foreign keys so account erasure also works on SQLite.
     face_scans: Mapped[list["FaceScan"]] = relationship(cascade="all, delete-orphan")
+    analysis_results: Mapped[list["AnalysisResult"]] = relationship(cascade="all, delete-orphan")
+    reports: Mapped[list["RecommendationReport"]] = relationship(cascade="all, delete-orphan")
+    saved_looks: Mapped[list["SavedTryOnLook"]] = relationship(cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -106,7 +111,7 @@ class OAuthAccount(Base):
     user: Mapped[User] = relationship(back_populates="oauth_accounts")
 
 
-# â”€â”€ Profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Profile ─────────────────────────────────────────────────────────────────
 
 
 class UserPreferences(TimestampMixin, Base):
@@ -123,6 +128,23 @@ class UserPreferences(TimestampMixin, Base):
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="preferences")
+
+
+class UserProfile(TimestampMixin, Base):
+    """Facts about the person (vs. `UserPreferences`, which are their goals). One row per user, created on demand."""
+
+    __tablename__ = "profiles"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    skin_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # normal | dry | oily | combination | sensitive
+    skin_concerns: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    # The analysis the user's current estimates come from; kept when that analysis is deleted, just unlinked.
+    latest_analysis_id: Mapped[str | None] = mapped_column(
+        ForeignKey("analysis_results.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    user: Mapped[User] = relationship(back_populates="profile")
+    latest_analysis: Mapped["AnalysisResult | None"] = relationship()
 
 
 class ImageUpload(TimestampMixin, Base):
@@ -147,23 +169,80 @@ class ImageUpload(TimestampMixin, Base):
     # Scans contain derived biometric data and are erased with their source image.
     face_scans: Mapped[list["FaceScan"]] = relationship(cascade="all, delete-orphan")
 
+
+# ── Analysis, reports & recommendations ─────────────────────────────────────
+
+
+class AnalysisResult(Base):
+    """The feature estimates a report was generated from.
+
+    Unlike a `FaceScan` (raw landmarks, erased with the selfie), this is the durable, non-biometric
+    summary: when the source scan expires, `scan_id` is set to null and the result is kept.
+    """
+
+    __tablename__ = "analysis_results"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("ana"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    scan_id: Mapped[str | None] = mapped_column(ForeignKey("face_scans.id", ondelete="SET NULL"), nullable=True, index=True)
+    source: Mapped[str] = mapped_column(String(10), nullable=False)  # scan | manual
+    features: Mapped[dict] = mapped_column(JSON, nullable=False)  # schemas.RecommendationFeatures
+    skin_tone_hex: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    scan: Mapped["FaceScan | None"] = relationship()
+
+
 class RecommendationReport(Base):
-    """Account-owned snapshot of estimates and ranked suggestions."""
+    """Account-owned snapshot of estimates and ranked suggestions.
+
+    `report_data` is the immutable snapshot that is rendered and shared; `recommendations` indexes its items
+    so feedback can reference them with a foreign key.
+    """
 
     __tablename__ = "recommendation_reports"
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("rpt"))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    analysis_id: Mapped[str | None] = mapped_column(ForeignKey("analysis_results.id", ondelete="SET NULL"), nullable=True, index=True)
     report_data: Mapped[dict] = mapped_column(JSON, nullable=False)
     share_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    analysis: Mapped[AnalysisResult | None] = relationship()
+    recommendations: Mapped[list["Recommendation"]] = relationship(
+        back_populates="report", cascade="all, delete-orphan", order_by="(Recommendation.category, Recommendation.rank)"
+    )
+
+
+class Recommendation(Base):
+    """One ranked suggestion within a report."""
+
+    __tablename__ = "recommendations"
+    __table_args__ = (UniqueConstraint("report_id", "item_key"),)
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("rec"))
+    report_id: Mapped[str] = mapped_column(ForeignKey("recommendation_reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_key: Mapped[str] = mapped_column(String(100), nullable=False)  # catalog ID, e.g. "eyewear.slim_rectangle"
+    category: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-based within its category
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    report: Mapped[RecommendationReport] = relationship(back_populates="recommendations")
+    feedback: Mapped[list["RecommendationFeedback"]] = relationship(cascade="all, delete-orphan")
 
 
 class RecommendationFeedback(Base):
     """One replaceable feedback vote per user and recommendation in a report."""
 
     __tablename__ = "recommendation_feedback"
-    __table_args__ = (UniqueConstraint("report_id", "user_id", "recommendation_id"),)
+    __table_args__ = (
+        UniqueConstraint("report_id", "user_id", "recommendation_id"),
+        # `recommendation_id` is the item's catalog key, so votes can only be cast on items the report contains.
+        ForeignKeyConstraint(
+            ["report_id", "recommendation_id"], ["recommendations.report_id", "recommendations.item_key"], ondelete="CASCADE"
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("fb"))
     report_id: Mapped[str] = mapped_column(ForeignKey("recommendation_reports.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -192,6 +271,8 @@ class FaceScan(TimestampMixin, Base):
     model_version: Mapped[str] = mapped_column(String(64), nullable=False)
     result: Mapped[dict] = mapped_column(JSON, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SavedTryOnLook(TimestampMixin, Base):
     """A user's reusable makeup preview, grouped by the occasion they selected."""
 

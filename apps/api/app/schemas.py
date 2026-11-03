@@ -186,6 +186,8 @@ class RecommendationsResponse(BaseModel):
 
 class CreateReportRequest(Strict):
     features: RecommendationFeatures
+    # The face scan the features were estimated from; omit when they were entered by hand.
+    scan_id: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class ReportFeedbackOut(BaseModel):

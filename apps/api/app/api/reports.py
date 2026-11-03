@@ -1,14 +1,14 @@
 """Account-owned recommendation reports, revocable sharing, and feedback."""
 
 from fastapi import APIRouter, Depends, Response
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import schemas
 from app.db import get_db, utcnow
 from app.deps import current_user
 from app.errors import ApiError
-from app.models import RecommendationFeedback, RecommendationReport, User
+from app.models import AnalysisResult, FaceScan, Recommendation, RecommendationFeedback, RecommendationReport, User, UserProfile
 from app.security import hash_token, new_opaque_token
 from app.services.recommendations import generate_recommendations
 
@@ -56,8 +56,30 @@ def create_report(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    scan = None
+    if body.scan_id is not None:
+        scan = db.scalar(select(FaceScan).where(FaceScan.id == body.scan_id, FaceScan.user_id == user.id, FaceScan.status == "succeeded"))
+        if scan is None:
+            raise ApiError(404, "NOT_FOUND", "Scan not found.")
+    skin_tone = ((scan.result.get("skin") or {}).get("skin_tone") or {}) if scan else {}
+    analysis = AnalysisResult(
+        user_id=user.id,
+        scan_id=scan.id if scan else None,
+        source="scan" if scan else "manual",
+        features=body.features.model_dump(mode="json"),
+        skin_tone_hex=skin_tone.get("hex"),
+    )
+
     result = generate_recommendations(body.features, user.preferences)
-    report = RecommendationReport(user_id=user.id, report_data=result.model_dump(mode="json"))
+    report = RecommendationReport(user_id=user.id, analysis=analysis, report_data=result.model_dump(mode="json"))
+    report.recommendations = [
+        Recommendation(item_key=item.id, category=group.category, rank=rank, score=item.score)
+        for group in result.recommendations
+        for rank, item in enumerate(group.items, start=1)
+    ]
+    profile = user.profile or UserProfile(user_id=user.id)
+    profile.latest_analysis = analysis
+    user.profile = profile
     db.add(report)
     db.commit()
     db.refresh(report)
@@ -97,8 +119,7 @@ def get_report(report_id: str, user: User = Depends(current_user), db: Session =
 @router.delete("/{report_id}", status_code=204)
 def delete_report(report_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     report = _owned_report(db, user.id, report_id)
-    db.execute(delete(RecommendationFeedback).where(RecommendationFeedback.report_id == report.id))
-    db.delete(report)
+    db.delete(report)  # recommendations and their feedback cascade
     db.commit()
     return Response(status_code=204)
 
@@ -128,8 +149,7 @@ def save_report_feedback(
     db: Session = Depends(get_db),
 ):
     report = _owned_report(db, user.id, report_id)
-    recommendation_ids = {item["id"] for group in report.report_data["recommendations"] for item in group["items"]}
-    if body.recommendation_id not in recommendation_ids:
+    if body.recommendation_id not in {rec.item_key for rec in report.recommendations}:
         raise ApiError(404, "NOT_FOUND", "Recommendation not found in this report.")
 
     feedback = db.scalar(
