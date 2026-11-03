@@ -22,7 +22,9 @@ async function create(): Promise<FaceLandmarker> {
   const options = (modelAssetPath: string, delegate: 'GPU' | 'CPU') => ({
     baseOptions: { modelAssetPath, delegate },
     runningMode: currentMode,
-    numFaces: 1,
+    // Two outputs are needed by the guided capture flow to reject multi-face frames.
+    // Existing consumers continue to use the first detected face.
+    numFaces: 2,
     minFaceDetectionConfidence: 0.5,
     minFacePresenceConfidence: 0.5,
     minTrackingConfidence: 0.5,

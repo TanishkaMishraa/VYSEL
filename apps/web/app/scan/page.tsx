@@ -6,6 +6,7 @@ import { Alert, Button } from '@vysel/ui';
 import { AppShell } from '@/components/app/AppShell';
 import { RequireAuth } from '@/components/auth/guards';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { GuidedCapture } from '@/components/scan/GuidedCapture';
 import { ApiError } from '@/lib/api';
 import type { FaceShape, FeatureContrast, Report, RecommendationFeatures, SkinDepth, Undertone } from '@/lib/reports';
 
@@ -23,8 +24,14 @@ interface UploadedImage { image: { id: string } }
 interface ScanResult {
   id: string;
   status: 'queued' | 'running' | 'succeeded' | 'failed';
+  face_count?: number;
   error?: { code: string; message: string };
   recommendation_features?: RecommendationFeatures | null;
+  warnings?: { code: string; message: string }[];
+  head_pose?: { pitch: number; yaw: number; roll: number };
+  validation?: Record<string, { passed: boolean; value: string | number; threshold: string | number; message: string }>;
+  skin?: { status?: string; color_correction?: { method?: string; applied?: boolean; clamped?: boolean } };
+  attributes?: { face_shape?: { status?: string }; eye_color?: { status?: string }; hair_color?: { status?: string } };
 }
 
 function ScanSetup() {
@@ -44,6 +51,7 @@ function ScanSetup() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (pollTimer.current) clearTimeout(pollTimer.current); }, []);
@@ -230,6 +238,7 @@ function ScanSetup() {
               <Button variant="secondary" onClick={() => input.current?.click()} type="button">
                 {file ? 'Choose a different photo' : 'Choose photo'}
               </Button>
+              <Button variant="secondary" type="button" onClick={() => { setError(null); setCameraOpen(true); }}>Use guided camera</Button>
               {file && <p className="vy-caption">{file.name}</p>}
               {file && <label className="vy-caption"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> I consent to VYSEL processing this selfie to estimate facial attributes.</label>}
               {file && <Button type="button" onClick={() => void analyzePhoto()} disabled={!consent || analyzing}>
@@ -245,6 +254,30 @@ function ScanSetup() {
           </section>
         </details>
 
+        {cameraOpen && <div className="capture__modal" role="dialog" aria-modal="true" aria-labelledby="capture-title">
+          <div className="capture__dialog">
+            <h2 className="vy-h3" id="capture-title">Guided selfie capture</h2>
+            <GuidedCapture onCancel={() => setCameraOpen(false)} onCapture={(captured) => {
+              setFile(captured); setConsent(false); setScan(null); setScanId(null); setCameraOpen(false);
+              setFaceShape(''); setUndertone(''); setSkinDepth(''); setContrast('');
+            }} />
+          </div>
+        </div>}
+
+        {scan?.status === 'succeeded' && <section className="scan__assessments vy-card" aria-labelledby="scan-assessments-title">
+          <h2 className="vy-h4" id="scan-assessments-title">Scan assessments</h2>
+          <p className="vy-caption">Separate checks from the available image and face analysis. Unknown indicators are shown as inconclusive.</p>
+          <div className="scan__assessment-grid">
+            <Assessment title="Face alignment" status={scan.face_count !== 1 ? 'Inconclusive' : scan.warnings?.some((warning) => ['FACE_PARTIALLY_OUT_OF_FRAME', 'HIGH_HEAD_ROTATION', 'FACE_LOW_RESOLUTION'].includes(warning.code)) ? 'Warning' : 'Passed'} detail={scan.warnings?.filter((warning) => ['FACE_PARTIALLY_OUT_OF_FRAME', 'HIGH_HEAD_ROTATION', 'FACE_LOW_RESOLUTION'].includes(warning.code)).map((warning) => warning.message).join(' ') || (scan.face_count === 1 ? 'One face was detected and passed the scan alignment checks.' : 'Face count or alignment results are unavailable.')} />
+            <Assessment title="Image quality" status={!scan.validation ? 'Inconclusive' : Object.values(scan.validation).every((check) => check.passed) ? 'Passed' : 'Warning'} detail={Object.values(scan.validation ?? {}).map((check) => check.message).join(' ') || 'No image quality details were returned.'} />
+            <Assessment title="Lighting quality" status={!scan.validation?.brightness || !scan.validation.exposure ? 'Inconclusive' : scan.validation.brightness.passed && scan.validation.exposure.passed ? 'Passed' : 'Warning'} detail={[scan.validation?.brightness?.message, scan.validation?.exposure?.message].filter(Boolean).join(' ') || 'Lighting could not be assessed.'} />
+            <Assessment title="Colour consistency" status="Inconclusive" detail={scan.skin?.color_correction?.method ? `Skin analysis used ${scan.skin.color_correction.method} white-balance correction${scan.skin.color_correction.applied ? '' : ' (not applied)'}. This does not distinguish camera processing from filters.` : 'Camera colour profile and intentional colour edits are not reliably distinguishable with the available analysis.'} />
+            <Assessment title="Possible filters or manipulation" status="Inconclusive" detail="No validated forensic manipulation or face-swap detector is configured. Colour or texture differences alone are not treated as proof of editing." />
+            <Assessment title="Liveness" status="Inconclusive" detail="The guided movement challenge is a capture aid, not a validated presentation-attack detector. Printed or replayed faces may pass." />
+            <Assessment title="Face identity similarity" status="Inconclusive" detail="Reference-image identity verification is not available in this scan flow." />
+          </div>
+        </section>}
+
         {error && <Alert tone="danger">{error}</Alert>}
         <div className="scan__submit">
           <Button type="submit" disabled={saving}>{saving ? 'Creating report…' : 'Generate my Style DNA report'}</Button>
@@ -253,6 +286,10 @@ function ScanSetup() {
       </form>
     </div>
   );
+}
+
+function Assessment({ title, status, detail }: { title: string; status: 'Passed' | 'Warning' | 'Failed' | 'Inconclusive'; detail: string }) {
+  return <article className="scan__assessment"><div><h3 className="vy-label">{title}</h3><span className={`scan__assessment-status scan__assessment-status--${status.toLowerCase()}`}>{status}</span></div><p className="vy-caption">{detail}</p></article>;
 }
 
 export default function ScanPage() {
