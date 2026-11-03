@@ -12,16 +12,19 @@ from app.db import get_db, utcnow
 from app.deps import current_user
 from app.errors import ApiError
 from app.models import (
+    AnalysisResult,
     FaceScan,
     ImageUpload,
     OAuthAccount,
     PasswordResetToken,
+    Recommendation,
     RecommendationFeedback,
     RecommendationReport,
     RefreshToken,
     SavedTryOnLook,
     User,
     UserPreferences,
+    UserProfile,
 )
 from app.services import auth as sessions
 from app.services.image_storage import delete_image as remove_image
@@ -78,11 +81,18 @@ def delete_me(response: Response, user: User = Depends(current_user), db: Sessio
 
     user_id = user.id
     db.execute(delete(RecommendationFeedback).where(RecommendationFeedback.user_id == user_id))
+    db.execute(
+        delete(Recommendation).where(
+            Recommendation.report_id.in_(select(RecommendationReport.id).where(RecommendationReport.user_id == user_id))
+        )
+    )
     db.execute(delete(RecommendationReport).where(RecommendationReport.user_id == user_id))
     db.execute(delete(FaceScan).where(FaceScan.user_id == user_id))
     db.execute(delete(ImageUpload).where(ImageUpload.user_id == user_id))
     db.execute(delete(SavedTryOnLook).where(SavedTryOnLook.user_id == user_id))
     db.execute(delete(UserPreferences).where(UserPreferences.user_id == user_id))
+    db.execute(delete(UserProfile).where(UserProfile.user_id == user_id))
+    db.execute(delete(AnalysisResult).where(AnalysisResult.user_id == user_id))
     db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
     db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user_id))
     db.execute(delete(OAuthAccount).where(OAuthAccount.user_id == user_id))

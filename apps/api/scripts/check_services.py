@@ -46,7 +46,7 @@ def check_postgres(url: str) -> None:
     with engine.connect() as conn:
         version = conn.execute(text("SHOW server_version")).scalar_one()
         db, user = conn.execute(text("SELECT current_database(), current_user")).one()
-        print(f"  ✓ PostgreSQL {version} — database '{db}' as '{user}'")
+        print(f"  [OK] PostgreSQL {version} - database '{db}' as '{user}'")
         # Write/read round trip in the auto-begun transaction, then roll back: leaves no trace.
         conn.execute(text("CREATE TEMP TABLE vysel_healthcheck (id text PRIMARY KEY)"))
         token = uuid.uuid4().hex
@@ -54,7 +54,7 @@ def check_postgres(url: str) -> None:
         if conn.execute(text("SELECT id FROM vysel_healthcheck")).scalar_one() != token:
             raise RuntimeError("read-back value did not match what was written")
         conn.rollback()
-        print("  ✓ PostgreSQL write/read round trip")
+        print("  [OK] PostgreSQL write/read round trip")
     engine.dispose()
 
 
@@ -68,7 +68,7 @@ def check_redis(url: str) -> None:
     if client.get(key) != b"ok":
         raise RuntimeError("GET did not return the value just SET")
     client.delete(key)
-    print(f"  ✓ Redis-compatible server {info.get('redis_version')} — PING, SET/GET round trip")
+    print(f"  [OK] Redis-compatible server {info.get('redis_version')} - PING, SET/GET round trip")
 
 
 def main() -> int:
@@ -79,13 +79,13 @@ def main() -> int:
         url = os.environ.get(var)
         print(f"{var} = {redact(url) if url else '(not set)'}")
         if not url:
-            print(f"  ✗ {var} is not set — copy apps/api/.env.example to apps/api/.env")
+            print(f"  [FAIL] {var} is not set - copy apps/api/.env.example to apps/api/.env")
             failures += 1
             continue
         try:
             check(url)
         except Exception as exc:  # report every failure, keep checking the rest
-            print(f"  ✗ {type(exc).__name__}: {exc}")
+            print(f"  [FAIL] {type(exc).__name__}: {exc}")
             failures += 1
     print("\nAll services reachable." if not failures else f"\n{failures} check(s) failed.")
     return 1 if failures else 0

@@ -33,7 +33,7 @@ export function ReportView({
         <div>
           <p className="vy-overline">Your Style DNA</p>
           <h1 className="vy-h2">A palette that feels like you.</h1>
-          <p className="vy-body">Personalised styling ideas, based on the estimates you provided.</p>
+          <p className="vy-body">Personalised styling ideas, based on your estimates and saved preferences.</p>
         </div>
         <Badge tone="accent">{data.season.value} season · provisional</Badge>
       </header>
@@ -112,7 +112,7 @@ export function ReportView({
 
       <aside className="style-report__disclaimer">
         <p className="vy-caption">{data.disclaimer}</p>
-        <p className="vy-caption">This report is generated from self-selected estimates and profile preferences. It is not facial analysis or professional advice.</p>
+        <p className="vy-caption">These estimates are approximate styling guidance, not objective judgments or professional advice.</p>
       </aside>
     </article>
   );

@@ -12,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import auth, health, images, jobs, me, recommendations, reports, saved_looks, scans
 from app.api import auth, health, images, jobs, me, product_matches, recommendations, reports, saved_looks, scans
 from app.config import get_settings
 from app.errors import register_error_handlers

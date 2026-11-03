@@ -2,11 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* next/font self-hosts the brand faces; point the design tokens at them. */
+/* Use local system font stacks so production builds do not require network access. */
 :root {
-  --vy-font-display: var(--font-cinzel), 'Trajan Pro', 'Times New Roman', serif;
-  --vy-font-editorial: var(--font-cormorant), Garamond, Georgia, serif;
-  --vy-font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vy-font-display: 'Trajan Pro', 'Times New Roman', serif;
+  --vy-font-editorial: Garamond, Georgia, 'Times New Roman', serif;
+  --vy-font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 html { scroll-behavior: smooth; scroll-padding-top: 5rem; }

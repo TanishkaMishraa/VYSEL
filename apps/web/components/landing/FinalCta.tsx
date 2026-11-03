@@ -23,7 +23,7 @@ export function FinalCta() {
             <span className="vy-btn__label">Revisit the sample</span>
           </a>
         </div>
-        <p className="vy-caption">VYSEL is in early development. The selfie scan is coming soon.</p>
+        <p className="vy-caption">You can create a report from your own estimates or choose to analyze a selfie.</p>
       </Reveal>
     </section>
   );

@@ -1,15 +1,9 @@
 import type { Metadata, Viewport } from 'next';
-import { Cinzel, Cormorant_Garamond, DM_Sans } from 'next/font/google';
 import '@vysel/ui/tokens.css';
 import '@vysel/ui/components.css';
 import './globals.css';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import { site } from '@/lib/site';
-
-// Self-hosted at build time: no runtime request to Google, no layout shift.
-const cinzel = Cinzel({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-cinzel', display: 'swap' });
-const cormorant = Cormorant_Garamond({ subsets: ['latin'], weight: ['400', '500', '600'], style: ['normal', 'italic'], variable: '--font-cormorant', display: 'swap' });
-const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-dm-sans', display: 'swap' });
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
@@ -37,7 +31,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="obsidian" className={`${cinzel.variable} ${cormorant.variable} ${dmSans.variable}`}>
+    <html lang="en" data-theme="obsidian">
       <body className="vy-root">
         <a className="vy-skip-link" href="#main">
           Skip to content

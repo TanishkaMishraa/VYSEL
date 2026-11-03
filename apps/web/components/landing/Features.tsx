@@ -22,7 +22,7 @@ const FEATURES = [
 
 const PRINCIPLES = [
   { title: 'Explainable', body: 'Every recommendation says why. Estimates show their confidence. Nothing is presented as objective truth.' },
-  { title: 'Private by default', body: 'Consent comes first. Photos are deleted after analysis unless you choose to keep them.' },
+  { title: 'Private by default', body: 'Selfie processing requires your consent. Uploaded photos and scan data are deleted automatically after 24 hours.' },
   { title: 'Accessible', body: 'Personal guidance from one selfie, for people who cannot easily reach or afford a stylist.' },
 ];
 
