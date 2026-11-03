@@ -1,17 +1,28 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Alert, Badge, StateMessage, buttonClassName } from '@vysel/ui';
 import { AppShell } from '@/components/app/AppShell';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { RequireAuth } from '@/components/auth/guards';
 import { BUDGETS, OCCASIONS, STYLE_GOALS, STYLES, labelOf } from '@/lib/preferences';
+import { ApiError } from '@/lib/api';
+import type { ReportListItem } from '@/lib/reports';
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, apiRequest } = useAuth();
+  const [reports, setReports] = useState<ReportListItem[] | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const preferences = user!.preferences;
   const goals = preferences.style_goals.map((goal) => labelOf(STYLE_GOALS, goal)!);
   const occasions = preferences.occasions.map((occasion) => labelOf(OCCASIONS, occasion)!);
+
+  useEffect(() => {
+    apiRequest<ReportListItem[]>('/reports')
+      .then(setReports)
+      .catch((cause: unknown) => setReportError(cause instanceof ApiError ? cause.message : 'Could not load your reports.'));
+  }, [apiRequest]);
 
   return (
     <div className="dash">
@@ -36,10 +47,10 @@ function Dashboard() {
       <section className="dash__feature vy-card" aria-labelledby="dash-scan-title">
         <div className="dash__feature-copy">
           <p className="vy-overline">Your next step</p>
-          <h2 className="vy-h3" id="dash-scan-title">Start with a selfie</h2>
-          <p className="vy-body">The scan screen helps you prepare a photo. Style analysis isn’t available yet, so your photo won’t be uploaded.</p>
+          <h2 className="vy-h3" id="dash-scan-title">Create a Style DNA report</h2>
+          <p className="vy-body">Choose your own feature estimates to get personalised colour, hair, eyewear, makeup, and outfit suggestions. Your photo is never uploaded.</p>
           <Link href="/scan" className={buttonClassName()}>
-            <span className="vy-btn__label">Open scan</span>
+            <span className="vy-btn__label">Create a report</span>
           </Link>
         </div>
         <div className="dash__feature-mark" aria-hidden="true">
@@ -47,6 +58,46 @@ function Dashboard() {
           <span className="dash__orbit dash__orbit--one" />
           <span className="dash__orbit dash__orbit--two" />
         </div>
+      </section>
+
+      <section className="dash__section" aria-labelledby="dash-reports-title">
+        <div className="dash__section-head">
+          <div>
+            <p className="vy-overline">Your saved style reports</p>
+            <h2 className="vy-h4" id="dash-reports-title">Style DNA history</h2>
+          </div>
+          <Link href="/scan" className={buttonClassName({ variant: 'secondary' })}>
+            <span className="vy-btn__label">New report</span>
+          </Link>
+        </div>
+        {reportError && <Alert tone="danger">{reportError}</Alert>}
+        {reports === null ? (
+          <p className="vy-caption">Loading your saved reports…</p>
+        ) : reports.length > 0 ? (
+          <div className="dash__reports">
+            {reports.map((report) => (
+              <article className="dash__report vy-card" key={report.id}>
+                <div>
+                  <p className="vy-overline">{report.season} season</p>
+                  <p className="vy-caption">{new Date(report.created_at).toLocaleDateString()} · {report.recommendation_count} recommendations</p>
+                </div>
+                <div className="dash__report-actions">
+                  {report.share_enabled && <Badge tone="accent">Shared</Badge>}
+                  <Link href={`/reports/${encodeURIComponent(report.id)}`} className={buttonClassName({ variant: 'link' })}>
+                    <span className="vy-btn__label">View report</span>
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <StateMessage
+            kind="empty"
+            title="Your reports will appear here"
+            description="Create a Style DNA report to save your first set of recommendations."
+            actions={<Link href="/scan" className={buttonClassName()}><span className="vy-btn__label">Create report</span></Link>}
+          />
+        )}
       </section>
 
       <section className="dash__section" aria-labelledby="dash-goals-title">

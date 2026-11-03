@@ -102,6 +102,123 @@ class ProfileUpdate(Strict):
     onboarding_completed: bool | None = None
 
 
+# ── Explainable recommendations ──
+
+FaceShape = Literal["oval", "round", "square", "heart", "oblong", "diamond"]
+Undertone = Literal["warm", "cool", "neutral", "olive"]
+SkinDepth = Literal["fair", "light", "medium", "tan", "deep"]
+FeatureContrast = Literal["low", "medium", "high"]
+RecommendationCategory = Literal["hair", "eyewear", "makeup", "outfit_color", "outfit_cut"]
+Season = Literal["spring", "summer", "autumn", "winter"]
+
+
+class FaceShapeEstimate(Strict):
+    value: FaceShape
+    confidence: float = Field(ge=0, le=1)
+
+
+class UndertoneEstimate(Strict):
+    value: Undertone
+    confidence: float = Field(ge=0, le=1)
+
+
+class SkinDepthEstimate(Strict):
+    value: SkinDepth
+    confidence: float = Field(ge=0, le=1)
+
+
+class ContrastEstimate(Strict):
+    value: FeatureContrast
+    confidence: float = Field(ge=0, le=1)
+
+
+class RecommendationFeatures(Strict):
+    face_shape: FaceShapeEstimate
+    undertone: UndertoneEstimate
+    skin_depth: SkinDepthEstimate
+    contrast: ContrastEstimate = Field(default_factory=lambda: ContrastEstimate(value="medium", confidence=0.5))
+
+
+class PaletteColor(BaseModel):
+    name: str
+    hex: str
+    role: Literal["base", "accent", "neutral"]
+    wear: str
+
+
+class SeasonEstimate(BaseModel):
+    value: Season
+    confidence: float = Field(ge=0, le=0.7)
+    rationale: str
+
+
+class RecommendationItem(BaseModel):
+    id: str
+    label: str
+    reason: str
+    score: float = Field(ge=0, le=1)
+    budget: Budget
+    within_budget: bool | None
+    color_hex: str | None = None
+
+
+class RecommendationGroup(BaseModel):
+    category: RecommendationCategory
+    items: list[RecommendationItem]
+
+
+class RecommendationScoring(BaseModel):
+    feature_fit: float
+    style_goal: float
+    personal_style: float
+    occasion: float
+    budget: float
+
+
+class RecommendationsResponse(BaseModel):
+    features: RecommendationFeatures
+    season: SeasonEstimate
+    palette: list[PaletteColor]
+    recommendations: list[RecommendationGroup]
+    scoring: RecommendationScoring
+    disclaimer: str
+
+
+class CreateReportRequest(Strict):
+    features: RecommendationFeatures
+
+
+class ReportFeedbackOut(BaseModel):
+    recommendation_id: str
+    helpful: bool
+    updated_at: datetime
+
+
+class ReportOut(BaseModel):
+    id: str
+    created_at: datetime
+    report_data: RecommendationsResponse
+    share_enabled: bool
+    feedback: list[ReportFeedbackOut] = Field(default_factory=list)
+
+
+class ReportListItem(BaseModel):
+    id: str
+    created_at: datetime
+    season: Season
+    recommendation_count: int
+    share_enabled: bool
+
+
+class ShareLinkOut(BaseModel):
+    share_url: str
+
+
+class ReportFeedbackRequest(Strict):
+    recommendation_id: str = Field(min_length=1, max_length=100)
+    helpful: bool
+
+
 class AuthSession(BaseModel):
     access_token: str
     token_type: Literal["Bearer"] = "Bearer"  # noqa: S105 — the auth scheme, not a secret

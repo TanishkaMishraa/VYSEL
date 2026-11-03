@@ -42,6 +42,10 @@ tags:
     description: Registration, login and session lifecycle.
   - name: Profile
     description: The signed-in user's profile and default style preferences.
+  - name: Recommendations
+    description: Deterministic style suggestions from explicitly supplied estimates and profile preferences.
+  - name: Reports
+    description: Private account-owned recommendation snapshots, explicit revocable sharing and recommendation feedback.
   - name: Images
     description: Consent-gated, direct-to-storage selfie uploads.
   - name: Analyses
@@ -489,6 +493,154 @@ paths:
                 status: 409
                 code: ANALYSIS_NOT_READY
                 detail: Analysis is still processing. Poll the analysis until it succeeds.
+
+  /recommendations:
+    post:
+      tags: [Recommendations]
+      operationId: getRecommendations
+      summary: Generate ranked styling suggestions
+      description: |
+        Applies deterministic styling rules to explicitly supplied estimated
+        attributes and the signed-in user's saved preferences. This endpoint
+        does not analyze images or persist a report. Recommendations are subjective
+        style ideas, not a diagnosis or guarantee of fit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecommendationFeatures' }
+            example:
+              face_shape: { value: oval, confidence: 0.72 }
+              undertone: { value: neutral, confidence: 0.64 }
+              skin_depth: { value: medium, confidence: 0.81 }
+              contrast: { value: low, confidence: 0.7 }
+      responses:
+        '200':
+          description: Ranked suggestions and a provisional seasonal palette.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecommendationsResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /reports:
+    post:
+      tags: [Reports]
+      operationId: createReport
+      summary: Generate and save a private Style DNA report
+      description: Uses only the submitted estimates and saved profile preferences. Does not accept or process an image.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReportRequest' }
+      responses:
+        '201':
+          description: The account-owned report snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Report' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    get:
+      tags: [Reports]
+      operationId: listReports
+      summary: List the signed-in user's reports
+      responses:
+        '200':
+          description: Reports, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReportListItem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /reports/{report_id}:
+    parameters:
+      - { name: report_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Reports]
+      operationId: getReport
+      summary: Get an owned report and saved feedback
+      responses:
+        '200':
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Report' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Reports]
+      operationId: deleteReport
+      summary: Delete an owned report and its feedback
+      responses:
+        '204': { description: Deleted. Any share link is revoked. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/{report_id}/share:
+    parameters:
+      - { name: report_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Reports]
+      operationId: enableReportSharing
+      summary: Enable or rotate an explicit public share link
+      description: Returns a high-entropy link only when enabled. Only its hash is stored; rotating or revoking invalidates the prior link.
+      responses:
+        '200':
+          description: Relative path to the public report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShareLink' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Reports]
+      operationId: disableReportSharing
+      summary: Revoke the public share link
+      responses:
+        '204': { description: Sharing is disabled. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/{report_id}/feedback:
+    parameters:
+      - { name: report_id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [Reports]
+      operationId: saveReportFeedback
+      summary: Save or update a helpfulness vote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportFeedbackRequest' }
+      responses:
+        '200':
+          description: Saved vote.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportFeedback' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/shared/{token}:
+    get:
+      tags: [Reports]
+      operationId: getSharedReport
+      summary: View a report using an explicit share link
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Public report snapshot without account identity.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecommendationsResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
 components:
   securitySchemes:
@@ -1065,6 +1217,155 @@ components:
         disclaimers:
           type: array
           items: { type: string }
+
+    # ── Explainable recommendations ──
+    RecommendationFeatures:
+      type: object
+      additionalProperties: false
+      required: [face_shape, undertone, skin_depth]
+      properties:
+        face_shape: { $ref: '#/components/schemas/RecommendationFaceShapeEstimate' }
+        undertone: { $ref: '#/components/schemas/RecommendationUndertoneEstimate' }
+        skin_depth: { $ref: '#/components/schemas/RecommendationSkinDepthEstimate' }
+        contrast:
+          allOf: [{ $ref: '#/components/schemas/RecommendationContrastEstimate' }]
+          description: Defaults to medium with 0.5 confidence.
+    RecommendationFaceShapeEstimate:
+      type: object
+      additionalProperties: false
+      required: [value, confidence]
+      properties:
+        value: { $ref: '#/components/schemas/FaceShape' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+    RecommendationUndertoneEstimate:
+      type: object
+      additionalProperties: false
+      required: [value, confidence]
+      properties:
+        value: { $ref: '#/components/schemas/Undertone' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+    RecommendationSkinDepthEstimate:
+      type: object
+      additionalProperties: false
+      required: [value, confidence]
+      properties:
+        value: { $ref: '#/components/schemas/SkinDepth' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+    RecommendationContrastEstimate:
+      type: object
+      additionalProperties: false
+      required: [value, confidence]
+      properties:
+        value: { type: string, enum: [low, medium, high] }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+    RecommendationColor:
+      type: object
+      required: [name, hex, role, wear]
+      properties:
+        name: { type: string }
+        hex: { $ref: '#/components/schemas/HexColor' }
+        role: { type: string, enum: [base, accent, neutral] }
+        wear: { type: string }
+    RecommendationItem:
+      type: object
+      required: [id, label, reason, score, budget, within_budget, color_hex]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        reason: { type: string }
+        score: { type: number, minimum: 0, maximum: 1 }
+        budget: { $ref: '#/components/schemas/Budget' }
+        within_budget: { type: [boolean, 'null'] }
+        color_hex: { oneOf: [{ $ref: '#/components/schemas/HexColor' }, { type: 'null' }] }
+    RecommendationGroup:
+      type: object
+      required: [category, items]
+      properties:
+        category:
+          type: string
+          enum: [hair, eyewear, makeup, outfit_color, outfit_cut]
+        items:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/RecommendationItem' }
+    RecommendationScoring:
+      type: object
+      required: [feature_fit, style_goal, personal_style, occasion, budget]
+      properties:
+        feature_fit: { type: number, const: 0.5 }
+        style_goal: { type: number, const: 0.2 }
+        personal_style: { type: number, const: 0.1 }
+        occasion: { type: number, const: 0.1 }
+        budget: { type: number, const: 0.1 }
+    RecommendationsResponse:
+      type: object
+      required: [features, season, palette, recommendations, scoring, disclaimer]
+      properties:
+        features: { $ref: '#/components/schemas/RecommendationFeatures' }
+        season:
+          type: object
+          required: [value, confidence, rationale]
+          properties:
+            value: { type: string, enum: [spring, summer, autumn, winter] }
+            confidence: { type: number, minimum: 0, maximum: 0.7 }
+            rationale: { type: string }
+        palette:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items: { $ref: '#/components/schemas/RecommendationColor' }
+        recommendations:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items: { $ref: '#/components/schemas/RecommendationGroup' }
+        scoring: { $ref: '#/components/schemas/RecommendationScoring' }
+        disclaimer: { type: string }
+    CreateReportRequest:
+      type: object
+      additionalProperties: false
+      required: [features]
+      properties:
+        features: { $ref: '#/components/schemas/RecommendationFeatures' }
+    Report:
+      type: object
+      required: [id, created_at, report_data, share_enabled, feedback]
+      properties:
+        id: { type: string }
+        created_at: { type: string, format: date-time }
+        report_data: { $ref: '#/components/schemas/RecommendationsResponse' }
+        share_enabled: { type: boolean }
+        feedback:
+          type: array
+          items: { $ref: '#/components/schemas/ReportFeedback' }
+    ReportListItem:
+      type: object
+      required: [id, created_at, season, recommendation_count, share_enabled]
+      properties:
+        id: { type: string }
+        created_at: { type: string, format: date-time }
+        season: { type: string, enum: [spring, summer, autumn, winter] }
+        recommendation_count: { type: integer, minimum: 0 }
+        share_enabled: { type: boolean }
+    ShareLink:
+      type: object
+      required: [share_url]
+      properties:
+        share_url: { type: string, description: Relative same-origin path containing the issued share token. }
+    ReportFeedbackRequest:
+      type: object
+      additionalProperties: false
+      required: [recommendation_id, helpful]
+      properties:
+        recommendation_id: { type: string, minLength: 1, maxLength: 100 }
+        helpful: { type: boolean }
+    ReportFeedback:
+      type: object
+      required: [recommendation_id, helpful, updated_at]
+      properties:
+        recommendation_id: { type: string }
+        helpful: { type: boolean }
+        updated_at: { type: string, format: date-time }
 
   examples:
     Profile:

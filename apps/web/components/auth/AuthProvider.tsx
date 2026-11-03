@@ -37,6 +37,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   /** Re-establish a session from the refresh cookie (e.g. after Google sign-in). */
   restore: () => Promise<Profile | null>;
+  apiRequest: <T>(path: string, init?: Parameters<typeof api>[1]) => Promise<T>;
   updateProfile: (patch: ProfileUpdate) => Promise<Profile>;
   deleteAccount: () => Promise<void>;
 }
@@ -112,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       user,
       restore,
+      apiRequest: authed,
       login: async (email, password) => apply(await api<AuthSession>('/auth/login', { method: 'POST', json: { email, password } }))!,
       register: async (email, password, display_name) =>
         apply(await api<AuthSession>('/auth/register', { method: 'POST', json: { email, password, display_name } }))!,

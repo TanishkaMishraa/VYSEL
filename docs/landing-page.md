@@ -28,7 +28,7 @@ A quiet, editorial walk from one selfie to a finished Style DNA. The story is to
 | 5 | Final CTA | `FinalCta` | Convert; state the honest product status | Porcelain band |
 | — | Footer | `SiteFooter` | Navigation, commitments, credit | — |
 
-CTAs point to `site.cta.href` (`/scan`). The signed-in scan setup currently previews a selected image locally and clearly explains that upload and analysis are not available yet.
+CTAs point to `site.cta.href` (`/scan`). Signed-in users can enter their own feature estimates and create a saved recommendation report. A photo may be previewed locally, but is not uploaded or analyzed; automated facial analysis is not implemented.
 
 ## File map
 
@@ -38,8 +38,10 @@ apps/web/
 │  ├─ layout.tsx            fonts (next/font), metadata, viewport, skip link
 │  ├─ page.tsx              section composition + JSON-LD
 │  ├─ globals.css           token font overrides + landing (lp-*) styles
-│  ├─ scan/page.tsx         signed-in local photo preview (noindex; analysis not connected)
-│  ├─ dashboard/page.tsx    signed-in overview and saved preferences
+│  ├─ scan/page.tsx         user-entered estimates and report creation; local-only optional photo preview
+│  ├─ reports/[id]/page.tsx private report, feedback, sharing controls and print-to-PDF
+│  ├─ shared/[token]/page.tsx token-gated public report view
+│  ├─ dashboard/page.tsx    signed-in overview, saved preferences and report history
 │  ├─ settings/page.tsx     account and preference management
 │  ├─ opengraph-image.tsx   generated 1200×630 OG image from wordmark paths
 │  ├─ icon.png · apple-icon.png · favicon.ico   app icons (from packages/ui/assets/brand/vysel-logo.png)
@@ -51,7 +53,8 @@ apps/web/
 │  ├─ SectionHeading.tsx · Reveal.tsx (client)
 └─ lib/
    ├─ site.ts               name, URL, CTA, nav — single place to edit
-   └─ sample-report.ts      ILLUSTRATIVE data + transparent ranking rule
+   ├─ sample-report.ts      ILLUSTRATIVE data + transparent ranking rule
+   └─ reports.ts            Report, feature and recommendation API types
 ```
 
 **Reuse rule:** UI elements come from `@vysel/ui`: Button/`buttonClassName`, Card, Badge/EstimateBadge, ChoiceChips, Tabs, Confidence, Alert, StateMessage, NavBar, Wordmark/Monogram. Landing CSS (`lp-*`) covers only layout and bespoke visuals, and uses tokens only. Tailwind is limited to layout utilities (preflight disabled so it never fights component CSS).
@@ -114,7 +117,7 @@ All durations and easings come from motion tokens, and nothing loops except the 
 ## Remaining issues / next steps
 
 - Choose a real domain and set `NEXT_PUBLIC_SITE_URL`.
-- Connect `/scan` to the real consent → upload → analysis flow (Phase 2); the current photo preview is local-only.
+- Add consent-gated upload and automated image analysis (Phase 2); the current report uses self-entered estimates and the optional photo preview is local-only.
 - Copy review with the team, especially the privacy commitments, which must match the shipped behaviour.
 - Add analytics only after a consent decision; none are included.
 - Validate the illustrative palette and picks with the planned user interviews before using them in marketing beyond this page.

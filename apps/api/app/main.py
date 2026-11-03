@@ -1,4 +1,4 @@
-"""FastAPI application.
+﻿"""FastAPI application.
 
 Run (from apps/api):  uvicorn app.main:app --reload --port 8000
 Docs:                 http://localhost:8000/docs
@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import auth, health, images, jobs, me
+from app.api import auth, health, images, jobs, me, recommendations, reports
 from app.config import get_settings
 from app.errors import register_error_handlers
 
@@ -35,6 +35,8 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
     app.include_router(images.router, prefix="/v1")
+    app.include_router(recommendations.router, prefix="/v1")
+    app.include_router(reports.router, prefix="/v1")
     return app
 
 

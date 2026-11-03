@@ -143,3 +143,29 @@ class ImageUpload(TimestampMixin, Base):
     consent_policy_version: Mapped[str] = mapped_column(String(32), nullable=False)
     retention: Mapped[str] = mapped_column(String(16), default="ephemeral", nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RecommendationReport(Base):
+    """Account-owned snapshot of estimates and ranked suggestions."""
+
+    __tablename__ = "recommendation_reports"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("rpt"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    report_data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    share_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class RecommendationFeedback(Base):
+    """One replaceable feedback vote per user and recommendation in a report."""
+
+    __tablename__ = "recommendation_feedback"
+    __table_args__ = (UniqueConstraint("report_id", "user_id", "recommendation_id"),)
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("fb"))
+    report_id: Mapped[str] = mapped_column(ForeignKey("recommendation_reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    recommendation_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    helpful: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
