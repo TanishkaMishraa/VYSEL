@@ -1,4 +1,4 @@
-"""ORM models."""
+﻿"""ORM models."""
 
 import enum
 import uuid
@@ -11,11 +11,11 @@ from app.db import Base, TimestampMixin, utcnow
 
 
 def prefixed_id(prefix: str):
-    """Opaque, prefixed IDs (usr_…, job_…) as specified in docs/api/openapi.yaml."""
+    """Opaque, prefixed IDs (usr_â€¦, job_â€¦) as specified in docs/api/openapi.yaml."""
     return lambda: f"{prefix}_{uuid.uuid4().hex}"
 
 
-# ── Background jobs ─────────────────────────────────────────────────────────
+# â”€â”€ Background jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class JobStatus(str, enum.Enum):
@@ -45,7 +45,7 @@ class BackgroundJob(TimestampMixin, Base):
     celery_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
-# ── Users & auth ────────────────────────────────────────────────────────────
+# â”€â”€ Users & auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class User(TimestampMixin, Base):
@@ -106,7 +106,7 @@ class OAuthAccount(Base):
     user: Mapped[User] = relationship(back_populates="oauth_accounts")
 
 
-# ── Profile ─────────────────────────────────────────────────────────────────
+# â”€â”€ Profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class UserPreferences(TimestampMixin, Base):
@@ -192,3 +192,14 @@ class FaceScan(TimestampMixin, Base):
     model_version: Mapped[str] = mapped_column(String(64), nullable=False)
     result: Mapped[dict] = mapped_column(JSON, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+class SavedTryOnLook(TimestampMixin, Base):
+    """A user's reusable makeup preview, grouped by the occasion they selected."""
+
+    __tablename__ = "saved_try_on_looks"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("look"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    occasion: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    look_data: Mapped[dict] = mapped_column(JSON, nullable=False)
+

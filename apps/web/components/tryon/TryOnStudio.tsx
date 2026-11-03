@@ -7,17 +7,36 @@ import { getFaceLandmarker } from '@/lib/tryon/faceLandmarker';
 import { LandmarkSmoother, faceWidth, toPixels, type Point } from '@/lib/tryon/landmarks';
 import { drawLook, type Look } from '@/lib/tryon/render';
 import { initialLook, presetsFor, type Preset, type ShadeSet } from '@/lib/tryon/shades';
+import { restoreLook, serializeLook, type SavedLookOccasion, type SavedTryOnLook } from '@/lib/tryon/savedLooks';
 import { ShadePicker } from './ShadePicker';
 
 type Phase = 'idle' | 'requesting' | 'loading' | 'live' | 'photo' | 'denied' | 'unavailable' | 'error';
 
 const MAX_PHOTO_EDGE = 1600;
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const OCCASIONS: { value: SavedLookOccasion; label: string }[] = [
+  { value: 'college', label: 'College' },
+  { value: 'office', label: 'Office' },
+  { value: 'party', label: 'Party' },
+  { value: 'wedding', label: 'Wedding' },
+];
 
-export function TryOnStudio({ shades }: { shades: ShadeSet }) {
+interface TryOnStudioProps {
+  shades: ShadeSet;
+  apiRequest?: <T>(path: string, init?: { method?: string; json?: unknown }) => Promise<T>;
+}
+
+export function TryOnStudio({ shades, apiRequest }: TryOnStudioProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [faceFound, setFaceFound] = useState(true);
   const [look, setLook] = useState<Look>(() => initialLook(shades));
+  const [savedLooks, setSavedLooks] = useState<SavedTryOnLook[]>([]);
+  const [savedLooksError, setSavedLooksError] = useState<string | null>(null);
+  const [lookName, setLookName] = useState('');
+  const [occasion, setOccasion] = useState<SavedLookOccasion>('college');
+  const [savingLook, setSavingLook] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [showBefore, setShowBefore] = useState(false);
   const presets = useMemo(() => presetsFor(shades), [shades]);
@@ -27,6 +46,8 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
+  const videoFrameRef = useRef<number | null>(null);
+  const permissionRequestRef = useRef(0);
   const smoother = useRef(new LandmarkSmoother());
   const photo = useRef<{ image: CanvasImageSource; width: number; height: number; points: Point[] | null } | null>(null);
   // The render loop reads the latest look without restarting.
@@ -43,6 +64,10 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
 
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
+    if (videoFrameRef.current !== null && videoRef.current?.cancelVideoFrameCallback) {
+      videoRef.current.cancelVideoFrameCallback(videoFrameRef.current);
+      videoFrameRef.current = null;
+    }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     smoother.current.reset();
@@ -51,14 +76,18 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
   // Release the camera when leaving the page or hiding the tab — never keep it on in the background.
   useEffect(() => {
     const onHide = () => {
-      if (document.hidden && streamRef.current) {
-        stopCamera();
-        setPhase('idle');
+      if (document.hidden) {
+        permissionRequestRef.current += 1;
+        if (streamRef.current) {
+          stopCamera();
+          setPhase('idle');
+        }
       }
     };
     document.addEventListener('visibilitychange', onHide);
     return () => {
       document.removeEventListener('visibilitychange', onHide);
+      permissionRequestRef.current += 1;
       stopCamera();
     };
   }, [stopCamera]);
@@ -69,6 +98,7 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d', { willReadFrequently: false })!;
     const landmarker = await getFaceLandmarker('VIDEO');
+    if (!streamRef.current) return;
     let lastTime = -1;
     let found = true;
 
@@ -97,7 +127,11 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
         }
         if (!!face !== found) setFaceFound((found = !!face)); // re-render only on change
       }
-      rafRef.current = requestAnimationFrame(frame);
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        videoFrameRef.current = video.requestVideoFrameCallback(frame);
+      } else {
+        rafRef.current = requestAnimationFrame(frame);
+      }
     };
     frame();
   }, []);
@@ -105,6 +139,7 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
   async function startCamera() {
     setError(null);
     photo.current = null;
+    const requestId = ++permissionRequestRef.current;
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setPhase('unavailable');
       return;
@@ -114,15 +149,21 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
     } catch (err) {
+      if (requestId !== permissionRequestRef.current || document.hidden) return;
       const name = (err as DOMException)?.name;
       setPhase(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : name === 'NotFoundError' || name === 'OverconstrainedError' ? 'unavailable' : 'error');
       if (name === 'NotReadableError') setError('Your camera is being used by another app. Close it and try again.');
+      return;
+    }
+    if (document.hidden || requestId !== permissionRequestRef.current) {
+      stream.getTracks().forEach((track) => track.stop());
       return;
     }
     streamRef.current = stream;
     setPhase('loading');
     try {
       await getFaceLandmarker('VIDEO'); // first run downloads the model; show progress meanwhile
+      if (requestId !== permissionRequestRef.current || document.hidden || !streamRef.current) return;
       const video = videoRef.current!;
       video.srcObject = stream;
       await video.play();
@@ -139,22 +180,37 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
   async function loadPhoto(file: File) {
     stopCamera();
     setError(null);
+    if (!PHOTO_TYPES.includes(file.type) || file.size > MAX_PHOTO_SIZE) {
+      if (fileRef.current) fileRef.current.value = '';
+      setError('Choose a JPEG, PNG, or WebP photo smaller than 10 MB.');
+      return;
+    }
     setPhase('loading');
+    let bitmap: ImageBitmap | null = null;
     try {
-      const bitmap = await createImageBitmap(file);
+      bitmap = await createImageBitmap(file);
       const scale = Math.min(1, MAX_PHOTO_EDGE / Math.max(bitmap.width, bitmap.height));
       const width = Math.round(bitmap.width * scale);
       const height = Math.round(bitmap.height * scale);
+      const resized = document.createElement('canvas');
+      resized.width = width;
+      resized.height = height;
+      const resizeContext = resized.getContext('2d');
+      if (!resizeContext) throw new Error('Photo resizing is not supported in this browser.');
+      resizeContext.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      bitmap = null;
       const landmarker = await getFaceLandmarker('IMAGE');
-      const result = landmarker.detect(bitmap);
+      const result = landmarker.detect(resized);
       const face = result.faceLandmarks[0];
-      photo.current = { image: bitmap, width, height, points: face ? toPixels(face, width, height, false) : null };
+      photo.current = { image: resized, width, height, points: face ? toPixels(face, width, height, false) : null };
       setFaceFound(!!face);
       setPhase('photo');
     } catch {
       setError('That image couldn’t be read. Try a JPEG or PNG.');
       setPhase('error');
     } finally {
+      bitmap?.close();
       if (fileRef.current) fileRef.current.value = '';
     }
   }
@@ -194,6 +250,62 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
     setActivePreset(null);
     setShowBefore(false);
   };
+
+  useEffect(() => {
+    if (!apiRequest) {
+      setSavedLooks([]);
+      setSavedLooksError(null);
+      return;
+    }
+    let active = true;
+    setSavedLooksError(null);
+    apiRequest<SavedTryOnLook[]>('/saved-looks')
+      .then((items) => {
+        if (active) setSavedLooks(items);
+      })
+      .catch((cause: unknown) => {
+        if (active) setSavedLooksError(cause instanceof Error ? cause.message : 'Could not load your saved looks.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiRequest]);
+
+  async function saveCurrentLook(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!apiRequest) return;
+    setSavingLook(true);
+    setSavedLooksError(null);
+    try {
+      const saved = await apiRequest<SavedTryOnLook>('/saved-looks', {
+        method: 'POST',
+        json: { name: lookName.trim(), occasion, look: serializeLook(look) },
+      });
+      setSavedLooks((current) => [...current, saved]);
+      setLookName('');
+    } catch (cause) {
+      setSavedLooksError(cause instanceof Error ? cause.message : 'Could not save this look.');
+    } finally {
+      setSavingLook(false);
+    }
+  }
+
+  function loadSavedLook(saved: SavedTryOnLook) {
+    setLook(restoreLook(saved.look));
+    setActivePreset(null);
+    setShowBefore(false);
+  }
+
+  async function removeSavedLook(id: string) {
+    if (!apiRequest) return;
+    setSavedLooksError(null);
+    try {
+      await apiRequest(`/saved-looks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      setSavedLooks((current) => current.filter((saved) => saved.id !== id));
+    } catch (cause) {
+      setSavedLooksError(cause instanceof Error ? cause.message : 'Could not delete the saved look.');
+    }
+  }
 
   const active = phase === 'live' || phase === 'photo';
 
@@ -294,8 +406,62 @@ export function TryOnStudio({ shades }: { shades: ShadeSet }) {
         <p className="vy-caption">Previews are approximate: lighting, camera and screen all change how colour looks.</p>
       </div>
 
-      <aside className="to-panel" aria-label="Makeup shades">
+      <aside className="to-panel" aria-label="Makeup shades and saved looks">
         <ShadePicker shades={shades} look={look} onChange={changeLook} presets={presets} activePreset={activePreset} onPreset={applyPreset} onReset={reset} />
+        {apiRequest ? (
+          <section className="to-saved" aria-labelledby="to-saved-title">
+            <div>
+              <p className="vy-overline">Your collection</p>
+              <h2 className="vy-h4" id="to-saved-title">Saved looks</h2>
+            </div>
+            <form className="to-save-form" onSubmit={saveCurrentLook}>
+              <label className="to-save-form__field">
+                <span className="vy-label">Look name</span>
+                <input className="vy-input" required maxLength={60} value={lookName} onChange={(event) => setLookName(event.target.value)} placeholder="e.g. Soft everyday look" />
+              </label>
+              <label className="to-save-form__field">
+                <span className="vy-label">Occasion</span>
+                <select value={occasion} onChange={(event) => setOccasion(event.target.value as SavedLookOccasion)}>
+                  {OCCASIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </label>
+              <Button type="submit" variant="secondary" loading={savingLook} disabled={savingLook}>Save current look</Button>
+            </form>
+            {savedLooksError && <Alert tone="danger">{savedLooksError}</Alert>}
+            {savedLooks.length ? (
+              <div className="to-saved__groups">
+                {OCCASIONS.map(({ value, label }) => {
+                  const group = savedLooks.filter((saved) => saved.occasion === value);
+                  if (!group.length) return null;
+                  return (
+                    <section className="to-saved__group" key={value} aria-labelledby={`saved-${value}`}>
+                      <h3 className="vy-overline" id={`saved-${value}`}>{label}</h3>
+                      {group.map((saved) => (
+                        <article className="to-saved__item" key={saved.id}>
+                          <div>
+                            <strong>{saved.name}</strong>
+                            <span className="vy-caption">{[saved.look.lips.enabled && saved.look.lips.shade_name, saved.look.blush.enabled && saved.look.blush.shade_name, saved.look.liner.enabled && `${saved.look.liner.shade_name}${saved.look.liner.wing ? ' · winged' : ''}`].filter(Boolean).join(' · ') || 'All layers off'}</span>
+                          </div>
+                          <div className="to-saved__actions">
+                            <Button variant="link" size="sm" onClick={() => loadSavedLook(saved)}>Load</Button>
+                            <Button variant="ghost" size="sm" onClick={() => removeSavedLook(saved.id)}>Delete</Button>
+                          </div>
+                        </article>
+                      ))}
+                    </section>
+                  );
+                })}
+              </div>
+            ) : !savedLooksError ? <p className="vy-caption">Save a look to find it here next time.</p> : null}
+          </section>
+        ) : (
+          <div className="to-cta">
+            <p className="vy-caption">Sign in to save looks and reload them later.</p>
+            <Link href="/login?next=%2Ftry-on" className={buttonClassName({ variant: 'secondary', size: 'sm' })}>
+              <span className="vy-btn__label">Sign in to save</span>
+            </Link>
+          </div>
+        )}
         {shades.source === 'starter' && (
           <div className="to-cta">
             <p className="vy-caption">Get shades matched to your undertone.</p>

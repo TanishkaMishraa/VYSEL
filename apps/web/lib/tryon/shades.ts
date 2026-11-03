@@ -91,7 +91,13 @@ export function shadesFromReport(report: Report): ShadeSet {
   };
 }
 
-const layerFrom = (shade: Shade, enabled: boolean, intensity: number) => ({ enabled, shadeId: shade.id, hex: shade.hex, intensity });
+const layerFrom = (shade: Shade, enabled: boolean, intensity: number) => ({
+  enabled,
+  shadeId: shade.id,
+  shadeName: shade.name,
+  hex: shade.hex,
+  intensity,
+});
 
 /** Starting look (also what Reset returns to): the top lip shade on, everything else off. */
 export function initialLook(set: ShadeSet): Look {

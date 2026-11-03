@@ -48,7 +48,9 @@ export function ShadePicker({ shades, look, onChange, presets, activePreset, onP
       {LAYERS.map(({ key, label, hint }) => {
         const layer = look[key];
         const list = shades[key];
-        const selected = list.find((s) => s.id === layer.shadeId) ?? list[0];
+        const selected = list.find((s) => s.id === layer.shadeId) ??
+          list.find((s) => s.hex.toLowerCase() === layer.hex.toLowerCase()) ??
+          { id: layer.shadeId, name: layer.shadeName, hex: layer.hex, recommended: false };
         return (
           <fieldset key={key} className="to-layer" data-enabled={layer.enabled}>
             <legend className="vy-visually-hidden">{label}</legend>
@@ -73,7 +75,7 @@ export function ShadePicker({ shades, look, onChange, presets, activePreset, onP
                     name={`to-${key}`}
                     value={s.id}
                     checked={layer.shadeId === s.id}
-                    onChange={() => update(key, { shadeId: s.id, hex: s.hex, enabled: true })}
+                    onChange={() => update(key, { shadeId: s.id, shadeName: s.name, hex: s.hex, enabled: true })}
                     aria-label={`${s.name}${s.recommended ? ', recommended for you' : ''}`}
                   />
                   <span className="to-swatch__chip" style={{ '--to-c': s.hex } as CSSProperties} aria-hidden="true" />

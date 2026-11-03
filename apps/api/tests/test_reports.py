@@ -33,6 +33,53 @@ def test_report_is_private_and_account_owned(client, signup):
     assert client.get("/v1/reports").status_code == 401
 
 
+def test_signup_preferences_to_saved_report_feedback_and_share(client, signup):
+    _, _, session = signup()
+    headers = bearer(session)
+    preferences = {
+        "style_goals": ["makeup", "palette"],
+        "occasions": ["work"],
+        "budget": "low",
+        "style": "minimal",
+        "categories": ["makeup"],
+    }
+
+    profile = client.patch(
+        "/v1/me",
+        headers=headers,
+        json={"preferences": preferences, "onboarding_completed": True},
+    )
+    assert profile.status_code == 200
+    assert profile.json()["onboarding_completed"] is True
+    assert profile.json()["preferences"] == preferences
+
+    report = create_report(client, headers)
+    assert report["report_data"]["recommendations"]
+    makeup = next(group for group in report["report_data"]["recommendations"] if group["category"] == "makeup")
+    item = makeup["items"][0]
+    assert item["reason"]
+    assert item["within_budget"] is not None
+
+    saved = client.get(f"/v1/reports/{report['id']}", headers=headers)
+    assert saved.status_code == 200
+    assert saved.json()["report_data"] == report["report_data"]
+
+    vote = client.put(
+        f"/v1/reports/{report['id']}/feedback",
+        headers=headers,
+        json={"recommendation_id": item["id"], "helpful": True},
+    )
+    assert vote.status_code == 200
+    assert client.get(f"/v1/reports/{report['id']}", headers=headers).json()["feedback"][0]["helpful"] is True
+
+    share = client.post(f"/v1/reports/{report['id']}/share", headers=headers)
+    assert share.status_code == 200
+    token = share.json()["share_url"].rsplit("/", 1)[-1]
+    assert client.get(f"/v1/reports/shared/{token}").json() == report["report_data"]
+    assert client.delete(f"/v1/reports/{report['id']}/share", headers=headers).status_code == 204
+    assert client.get(f"/v1/reports/shared/{token}").status_code == 404
+
+
 def test_share_link_is_explicit_revocable_and_contains_no_identity(client, signup):
     _, _, session = signup()
     headers = bearer(session)

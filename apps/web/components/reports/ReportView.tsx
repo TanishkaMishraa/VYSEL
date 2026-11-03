@@ -98,8 +98,8 @@ export function ReportView({
                     {onFeedback && (
                       <div className="style-report__feedback" aria-label={`Was ${item.label} helpful?`}>
                         <span className="vy-caption">Helpful?</span>
-                        <button type="button" className="style-report__vote" aria-pressed={feedback[item.id] === true} onClick={() => onFeedback(item.id, true)}>Yes</button>
-                        <button type="button" className="style-report__vote" aria-pressed={feedback[item.id] === false} onClick={() => onFeedback(item.id, false)}>No</button>
+                        <button type="button" className="style-report__vote" aria-label="Thumbs up: helpful" aria-pressed={feedback[item.id] === true} onClick={() => onFeedback(item.id, true)}>👍</button>
+                        <button type="button" className="style-report__vote" aria-label="Thumbs down: not helpful" aria-pressed={feedback[item.id] === false} onClick={() => onFeedback(item.id, false)}>👎</button>
                       </div>
                     )}
                   </article>

@@ -25,6 +25,7 @@ import {
 export interface Layer {
   enabled: boolean;
   shadeId: string;
+  shadeName: string;
   hex: string;
   /** 0–1 */
   intensity: number;

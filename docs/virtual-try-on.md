@@ -80,6 +80,18 @@ The UI (`components/tryon/ShadePicker.tsx`) offers:
 - **Reset:** returns to the starting look (top recommended lip at 60 %, blush and liner off) and turns off before/after.
 - The recommendation **reason** is shown under the selected recommended shade.
 
+## Saved looks (6.4)
+
+Signed-in users can name and save the current shades, enabled layers, intensity, and liner-wing setting, then group each look under **College**, **Office**, **Party**, or **Wedding**. The saved-look list is loaded from the account API, grouped by occasion, and supports loading or deleting a look. Guests can still use the studio but must sign in to save looks. Saved values include their own shade names and colours, so a look remains reloadable if the user's latest Style DNA report changes.
+
+Saved looks are private and owner-scoped. The API validates the occasion, colour format, and intensity, and account deletion removes saved-look records through the user foreign-key cascade. The look data contains styling controls only; camera frames and photos are not included.
+
+## Integration and performance checks (6.5)
+
+The studio loads shades from the signed-in user's latest saved Style DNA report; users without a report or guests get clearly labelled starter shades. Live rendering uses `requestVideoFrameCallback` when supported to avoid polling between camera frames, with an animation-frame fallback. Photo mode validates the selected image, downsizes it to at most 1600 px before face detection, and releases the original bitmap after resizing. Camera permission results are discarded if the page was hidden or unmounted while the prompt was pending.
+
+Overlay geometry follows MediaPipe facial landmarks and derives blush rotation from eye corners. Real-device checks across head turns, occlusion, lighting, and mobile camera implementations remain necessary; this repository does not include automated browser tests or a representative facial-angle test corpus.
+
 ## Files
 
 ```
@@ -88,6 +100,7 @@ apps/web/
 ├─ app/try-on/tryon.css           scoped styles (tokens only)
 ├─ components/tryon/TryOnStudio.tsx   camera/photo flow, render loop, snapshot
 ├─ components/tryon/ShadePicker.tsx   shades, intensity, presets, reset
+├─ lib/tryon/savedLooks.ts         account API mapping for saved looks
 ├─ lib/tryon/landmarks.ts         Face Mesh indices, geometry, smoothing
 ├─ lib/tryon/render.ts            lips / blush / liner drawing
 ├─ lib/tryon/faceLandmarker.ts    lazy singleton, GPU→CPU, local→hosted model
@@ -103,11 +116,12 @@ apps/web/
 - **Camera denied:** clear guidance plus the photo alternative.
 - **Signed-in user with a real report:** recommended shades listed first with reasons, nav link present, guest call to action hidden.
 - **Guest / API down:** falls back to starter shades.
+- **Saved looks:** API tests cover persistence, occasion filtering, input validation, reload payloads, and owner-scoped deletion.
 
 ## Limitations & next steps
 
 - Colour accuracy depends on lighting, camera white balance and screen. The UI says so.
 - Single face only (`numFaces: 1`).
 - Not tested on real mobile hardware yet. Check frame rate on mid-range Android and iOS Safari camera behaviour.
-- Possible additions: per-frame lighting compensation, eyeshadow and brow layers, saving looks to the profile, and a WebGL renderer if more layers are added.
+- Possible additions: per-frame lighting compensation, eyeshadow and brow layers, and a WebGL renderer if more layers are added.
 - `@mediapipe/tasks-vision` 1.x exists. Upgrade deliberately, then re-run the photo-mode check.

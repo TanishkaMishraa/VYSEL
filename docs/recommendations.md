@@ -17,9 +17,11 @@ The endpoint returns top-three picks for hair, eyewear, makeup, outfit colour, a
 outfit cut, plus a five-colour seasonal palette. Every pick has a stable catalogue
 ID, a plain-language rationale, budget tier, and ranking score. `POST /v1/reports`
 uses the same rules and stores a snapshot against the signed-in account. Users may
-provide feedback, print/save a PDF from the report page, or explicitly enable and
-later revoke a public share link. Reports contain no account identity on the public
-view. Image upload and automated analysis APIs remain unimplemented.
+provide thumbs-up/down feedback, download a formatted PDF generated in their
+browser, or explicitly enable and later revoke a public share link. PDF generation
+does not send report data to a third-party service. Reports contain no account
+identity on the public view. Image upload and automated analysis APIs remain
+unimplemented for this workflow.
 
 The report workflow asks the user to enter estimated attributes and an overall
 confidence level. The optional photo control is only a local browser preview and is

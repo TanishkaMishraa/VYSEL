@@ -219,6 +219,49 @@ class ReportFeedbackRequest(Strict):
     helpful: bool
 
 
+SavedLookOccasion = Literal["college", "office", "party", "wedding"]
+
+
+class SavedLookLayer(Strict):
+    enabled: bool
+    shade_id: str = Field(min_length=1, max_length=100)
+    shade_name: str = Field(min_length=1, max_length=60)
+    hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    intensity: float = Field(ge=0, le=1)
+
+
+class SavedLinerLayer(SavedLookLayer):
+    wing: bool
+
+
+class SavedLookData(Strict):
+    lips: SavedLookLayer
+    blush: SavedLookLayer
+    liner: SavedLinerLayer
+
+
+class CreateSavedLookRequest(Strict):
+    name: str = Field(min_length=1, max_length=60)
+    occasion: SavedLookOccasion
+    look: SavedLookData
+
+    @field_validator("name")
+    @classmethod
+    def _trim_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Look name can't be blank")
+        return value.strip()
+
+
+class SavedLookOut(BaseModel):
+    id: str
+    name: str
+    occasion: SavedLookOccasion
+    look: SavedLookData
+    created_at: datetime
+    updated_at: datetime
+
+
 class AuthSession(BaseModel):
     access_token: str
     token_type: Literal["Bearer"] = "Bearer"  # noqa: S105 — the auth scheme, not a secret

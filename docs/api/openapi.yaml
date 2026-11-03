@@ -46,6 +46,8 @@ tags:
     description: Deterministic style suggestions from explicitly supplied estimates and profile preferences.
   - name: Reports
     description: Private account-owned recommendation snapshots, explicit revocable sharing and recommendation feedback.
+  - name: Saved looks
+    description: Private, account-owned virtual try-on looks grouped by occasion.
   - name: Images
     description: Consent-gated, direct-to-storage selfie uploads.
   - name: Scans
@@ -721,6 +723,68 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RecommendationsResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /saved-looks:
+    post:
+      tags: [Saved looks]
+      operationId: createSavedLook
+      summary: Save a virtual try-on look
+      description: Saves shade selections and layer settings privately to the signed-in user's account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSavedLookRequest' }
+      responses:
+        '201':
+          description: The saved look.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SavedLook' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    get:
+      tags: [Saved looks]
+      operationId: listSavedLooks
+      summary: List saved looks, optionally filtered by occasion
+      parameters:
+        - name: occasion
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/SavedLookOccasion' }
+      responses:
+        '200':
+          description: The signed-in user's saved looks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SavedLook' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /saved-looks/{look_id}:
+    parameters:
+      - { name: look_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Saved looks]
+      operationId: getSavedLook
+      summary: Get an owned saved look for reloading
+      responses:
+        '200':
+          description: The saved look.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SavedLook' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Saved looks]
+      operationId: deleteSavedLook
+      summary: Delete an owned saved look
+      responses:
+        '204': { description: Deleted. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
 
 components:
@@ -1656,6 +1720,56 @@ components:
       properties:
         recommendation_id: { type: string }
         helpful: { type: boolean }
+        updated_at: { type: string, format: date-time }
+    SavedLookOccasion:
+      type: string
+      enum: [college, office, party, wedding]
+    SavedLookLayer:
+      type: object
+      additionalProperties: false
+      required: [enabled, shade_id, shade_name, hex, intensity]
+      properties:
+        enabled: { type: boolean }
+        shade_id: { type: string, minLength: 1, maxLength: 100 }
+        shade_name: { type: string, minLength: 1, maxLength: 60 }
+        hex: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+        intensity: { type: number, minimum: 0, maximum: 1 }
+    SavedLinerLayer:
+      type: object
+      additionalProperties: false
+      required: [enabled, shade_id, shade_name, hex, intensity, wing]
+      properties:
+        enabled: { type: boolean }
+        shade_id: { type: string, minLength: 1, maxLength: 100 }
+        shade_name: { type: string, minLength: 1, maxLength: 60 }
+        hex: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+        intensity: { type: number, minimum: 0, maximum: 1 }
+        wing: { type: boolean }
+    SavedLookData:
+      type: object
+      additionalProperties: false
+      required: [lips, blush, liner]
+      properties:
+        lips: { $ref: '#/components/schemas/SavedLookLayer' }
+        blush: { $ref: '#/components/schemas/SavedLookLayer' }
+        liner: { $ref: '#/components/schemas/SavedLinerLayer' }
+    CreateSavedLookRequest:
+      type: object
+      additionalProperties: false
+      required: [name, occasion, look]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        occasion: { $ref: '#/components/schemas/SavedLookOccasion' }
+        look: { $ref: '#/components/schemas/SavedLookData' }
+    SavedLook:
+      type: object
+      required: [id, name, occasion, look, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        occasion: { $ref: '#/components/schemas/SavedLookOccasion' }
+        look: { $ref: '#/components/schemas/SavedLookData' }
+        created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
   examples:

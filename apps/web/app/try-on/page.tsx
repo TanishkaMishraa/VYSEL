@@ -47,7 +47,7 @@ export default function TryOnPage() {
         </p>
       </header>
       {shades ? (
-        <TryOnStudio shades={shades} />
+        <TryOnStudio shades={shades} apiRequest={status === 'authenticated' ? apiRequest : undefined} />
       ) : (
         <div className="to-loading">
           <Spinner size="lg" label="Loading your shades" />

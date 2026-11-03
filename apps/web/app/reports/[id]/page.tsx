@@ -9,6 +9,7 @@ import { RequireAuth } from '@/components/auth/guards';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ReportView } from '@/components/reports/ReportView';
 import { ApiError } from '@/lib/api';
+import { downloadReportPdf } from '@/lib/reportPdf';
 import type { Report } from '@/lib/reports';
 
 function ReportPageContent() {
@@ -20,6 +21,7 @@ function ReportPageContent() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     apiRequest<Report>(`/reports/${encodeURIComponent(id)}`)
@@ -99,12 +101,26 @@ function ReportPageContent() {
     }
   }
 
+  async function exportPdf() {
+    if (!report) return;
+    setPdfBusy(true);
+    setError(null);
+    try {
+      downloadReportPdf(report.report_data, report.id, report.created_at);
+      setNotice('Your PDF download has started.');
+    } catch (cause) {
+      setError(cause instanceof Error ? `Could not create the PDF: ${cause.message}` : 'Could not create the PDF. Please try again.');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   if (!report && !error) return <p className="vy-body">Loading your report…</p>;
   return (
     <div className="report-page">
       <div className="report-page__actions screen-only">
         <Link href="/dashboard" className={buttonClassName({ variant: 'link' })}>Back to dashboard</Link>
-        <Button variant="secondary" onClick={() => window.print()}>Print / Save as PDF</Button>
+        <Button variant="secondary" disabled={pdfBusy} loading={pdfBusy} onClick={exportPdf}>Download PDF</Button>
       </div>
       {error && <Alert tone="danger">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
