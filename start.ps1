@@ -37,12 +37,26 @@ Ok "Node $(node -v)"
 if (-not (Test-Path $Py)) {
   Write-Host '  Creating Python 3.11 virtualenv...'
   & py -3.11 -m venv (Join-Path $Api '.venv'); if ($LASTEXITCODE) { Fail 'Python 3.11 not found (py -3.11). See docs/local-setup.md.' }
-  & $Py -m pip install --disable-pip-version-check -q -r (Join-Path $Api 'requirements-dev.txt'); if ($LASTEXITCODE) { Fail 'pip install failed.' }
 }
-Ok "Python $((& $Py --version) -replace 'Python ', '') (apps/api/.venv)"
+# Re-sync dependencies whenever their manifests change (e.g. after git pull), not only on first run.
+function DepsHash($files) { ($files | ForEach-Object { (Get-FileHash $_ -Algorithm SHA256).Hash }) -join '' }
+$pyStamp = Join-Path $Api '.venv\.deps-hash'
+$pyHash = DepsHash @((Join-Path $Api 'requirements.txt'), (Join-Path $Api 'requirements-dev.txt'))
+if (-not (Test-Path $pyStamp) -or (Get-Content $pyStamp -Raw) -ne $pyHash) {
+  Write-Host '  Installing Python packages (requirements changed)...'
+  & $Py -m pip install --disable-pip-version-check -q -r (Join-Path $Api 'requirements-dev.txt'); if ($LASTEXITCODE) { Fail 'pip install failed.' }
+  Set-Content -Path $pyStamp -Value $pyHash -NoNewline
+}
+Ok "Python $((& $Py --version) -replace 'Python ', '') (apps/api/.venv, dependencies in sync)"
 
-if (-not (Test-Path 'node_modules')) { Write-Host '  Installing npm packages...'; npm install --no-audit --no-fund; if ($LASTEXITCODE) { Fail 'npm install failed.' } }
-Ok 'node_modules present'
+$npmStamp = 'node_modules\.deps-hash'
+$npmHash = DepsHash @('package-lock.json')
+if (-not (Test-Path $npmStamp) -or (Get-Content $npmStamp -Raw) -ne $npmHash) {
+  Write-Host '  Installing npm packages (lockfile changed)...'
+  npm install --no-audit --no-fund; if ($LASTEXITCODE) { Fail 'npm install failed.' }
+  Set-Content -Path $npmStamp -Value $npmHash -NoNewline
+}
+Ok 'node_modules in sync with package-lock.json'
 
 if (-not (Test-Path (Join-Path $Api '.env'))) {
   Copy-Item (Join-Path $Api '.env.example') (Join-Path $Api '.env')

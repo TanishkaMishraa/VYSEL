@@ -35,12 +35,24 @@ if [ ! -x "$PY" ]; then
   command -v python3.11 >/dev/null || fail "python3.11 not found (docs/local-setup.md)."
   echo "  Creating Python 3.11 virtualenv..."
   python3.11 -m venv "$API/.venv"
-  "$PY" -m pip install --disable-pip-version-check -q -r "$API/requirements-dev.txt"
 fi
-ok "Python $("$PY" -c 'import platform; print(platform.python_version())') ($API/.venv)"
+# Re-sync dependencies whenever their manifests change (e.g. after git pull), not only on first run.
+deps_hash() { cat "$@" | "$PY" -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'; }
+PY_HASH=$(deps_hash "$API/requirements.txt" "$API/requirements-dev.txt")
+if [ "$(cat "$API/.venv/.deps-hash" 2>/dev/null)" != "$PY_HASH" ]; then
+  echo "  Installing Python packages (requirements changed)..."
+  "$PY" -m pip install --disable-pip-version-check -q -r "$API/requirements-dev.txt"
+  printf '%s' "$PY_HASH" > "$API/.venv/.deps-hash"
+fi
+ok "Python $("$PY" -c 'import platform; print(platform.python_version())') ($API/.venv, dependencies in sync)"
 
-[ -d node_modules ] || { echo "  Installing npm packages..."; npm install --no-audit --no-fund; }
-ok "node_modules present"
+NPM_HASH=$(deps_hash package-lock.json)
+if [ "$(cat node_modules/.deps-hash 2>/dev/null)" != "$NPM_HASH" ]; then
+  echo "  Installing npm packages (lockfile changed)..."
+  npm install --no-audit --no-fund
+  printf '%s' "$NPM_HASH" > node_modules/.deps-hash
+fi
+ok "node_modules in sync with package-lock.json"
 
 if [ ! -f "$API/.env" ]; then
   cp "$API/.env.example" "$API/.env"
