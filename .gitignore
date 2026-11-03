@@ -6,3 +6,10 @@ next-env.d.ts
 .env*
 !.env.example
 .DS_Store
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
