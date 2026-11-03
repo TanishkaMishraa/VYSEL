@@ -1,5 +1,7 @@
+import Image from 'next/image';
 import Link from 'next/link';
-import { Monogram, buttonClassName } from '@vysel/ui';
+import { buttonClassName } from '@vysel/ui';
+import logo from '@vysel/ui/assets/brand/vysel-logo.png';
 import { site } from '@/lib/site';
 import { Reveal } from './Reveal';
 
@@ -8,7 +10,7 @@ export function FinalCta() {
   return (
     <section className="lp-band vy-section" data-theme="porcelain" aria-labelledby="cta-title">
       <Reveal className="vy-container vy-container--narrow lp-band__inner">
-        <Monogram className="lp-band__mono" title={null} />
+        <Image src={logo} alt="" className="lp-band__mono" sizes="72px" />
         <h2 className="vy-h2" id="cta-title">
           Meet your <span className="vy-emphasis">Style DNA</span>.
         </h2>

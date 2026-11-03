@@ -40,7 +40,7 @@ apps/web/
 │  ├─ globals.css           token font overrides + landing (lp-*) styles
 │  ├─ scan/page.tsx         "coming soon" placeholder (noindex)
 │  ├─ opengraph-image.tsx   generated 1200×630 OG image from wordmark paths
-│  ├─ icon.svg              favicon (from packages/ui/assets/brand)
+│  ├─ icon.png · apple-icon.png · favicon.ico   app icons (from packages/ui/assets/brand/vysel-logo.png)
 │  ├─ robots.ts · sitemap.ts
 ├─ components/landing/
 │  ├─ Hero.tsx · FaceMap.tsx · HowItWorks.tsx
@@ -102,7 +102,7 @@ All durations and easings come from motion tokens, and nothing loops except the 
 
 ## Performance & SEO
 
-- **Zero raster images.** Illustration, icons and logo are inline SVG; the OG image is generated at build time.
+- **Raster only for the logo.** The app icon (`vysel-logo.png`) is the one raster asset, served through `next/image`; illustration and UI icons are inline SVG, and the OG image is generated at build time.
 - **Fonts** are self-hosted by `next/font` with `display: swap` (no request to Google at runtime) and only the weights in use.
 - **JS:** only `StyleDnaReport`, `Reveal`, `Tabs` and `NavBar` are client components; everything else is server-rendered HTML.
 - **Metadata:** title template, description, canonical, Open Graph and Twitter cards, `theme-color`, `robots.txt`, `sitemap.xml`, and JSON-LD (`WebSite` and `Organization` only, with no ratings or offers).

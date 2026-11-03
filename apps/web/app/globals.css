@@ -143,7 +143,7 @@ img, svg { max-width: 100%; }
 /* ── Final CTA band (Porcelain theme) & footer ───────────────────────── */
 .lp-band { background: rgb(var(--vy-bg)); color: rgb(var(--vy-text)); }
 .lp-band__inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--vy-space-6); }
-.lp-band__mono { width: 3.5rem; height: 3.5rem; color: rgb(var(--vy-text)); }
+.lp-band__mono { width: 4.5rem; height: 4.5rem; }
 .lp-footer { padding-block: var(--vy-space-16) var(--vy-space-10); border-top: var(--vy-border-hairline) solid rgb(var(--vy-border)); }
 .lp-footer__grid { display: grid; gap: var(--vy-space-10); }
 @media (min-width: 768px) { .lp-footer__grid { grid-template-columns: 1.4fr 1fr 1fr; } }
