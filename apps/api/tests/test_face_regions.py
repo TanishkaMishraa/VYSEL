@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import pytest
 
-from app.services.face_region_data import REGION_LANDMARKS
+from app.services.face_region_data import FEATURE_LANDMARKS, REGION_LANDMARKS
 from app.services.face_regions import AREA_REGIONS, CONTOUR_REGIONS, KEY_POINTS, REGIONS, region_geometry
 from tests.conftest import API_DIR
 
@@ -37,6 +37,16 @@ def test_committed_regions_match_generator():
     """Fails if face_region_data.py was hand-edited or MediaPipe's topology changed."""
     derived = {name: tuple(indices) for name, indices in GEN.derive_regions(CANON).items()}
     assert derived == REGION_LANDMARKS
+    assert {name: tuple(indices) for name, indices in GEN.derive_features().items()} == FEATURE_LANDMARKS
+
+
+def test_eye_and_iris_sets_are_mediapipes_documented_contours():
+    for side in ("left", "right"):
+        eye, iris = FEATURE_LANDMARKS[f"{side}_eye"], FEATURE_LANDMARKS[f"{side}_iris"]
+        documented_eye = {frozenset((c.start, c.end)) for c in getattr(C, f"FACE_LANDMARKS_{side.upper()}_EYE")}
+        assert {frozenset((eye[i], eye[(i + 1) % len(eye)])) for i in range(len(eye))} == documented_eye
+        assert set(iris) == _set(getattr(C, f"FACE_LANDMARKS_{side.upper()}_IRIS")) and len(iris) == 4
+        assert FEATURE_LANDMARKS[f"{side}_iris_center"][0] not in iris
 
 
 def test_every_region_is_defined_and_uses_valid_mesh_indices():
@@ -107,6 +117,10 @@ def test_key_points():
     assert REGIONS["chin_bottom"].landmark_indices[0] == oval[int(np.argmin(Y[oval]))]
     assert REGIONS["nose_tip"].landmark_indices[0] in _set(C.FACE_LANDMARKS_NOSE)
     assert X[REGIONS["left_face_edge"].landmark_indices[0]] > 0 > X[REGIONS["right_face_edge"].landmark_indices[0]]
+    for side, sign in (("left", 1), ("right", -1)):
+        forehead_edge = REGIONS[f"{side}_forehead_edge"].landmark_indices[0]
+        assert forehead_edge in oval and sign * X[forehead_edge] > 0
+        assert Y[forehead_edge] > Y[REGIONS[f"{side}_jaw_angle"].landmark_indices[0]]
 
 
 def test_region_geometry_from_projected_canonical_face():

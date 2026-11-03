@@ -20,12 +20,12 @@ uses the same rules and stores a snapshot against the signed-in account. Users m
 provide thumbs-up/down feedback, download a formatted PDF generated in their
 browser, or explicitly enable and later revoke a public share link. PDF generation
 does not send report data to a third-party service. Reports contain no account
-identity on the public view. Image upload and automated analysis APIs remain
-unimplemented for this workflow.
+identity on the public view. A face scan (`POST /v1/scans`) returns estimates as
+`recommendation_features`, ready to send to these endpoints (see
+apps/api/FACIAL_ATTRIBUTES.md).
 
-The report workflow asks the user to enter estimated attributes and an overall
-confidence level. The optional photo control is only a local browser preview and is
-not sent to the server.
+Users may enter estimates manually or use an authenticated face scan. An optional
+photo preview in the report form remains local to the browser.
 
 ## Feature mapping
 

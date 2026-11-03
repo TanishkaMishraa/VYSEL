@@ -77,6 +77,14 @@ def test_scan_of_a_valid_selfie(client, signup, storage, face_analyzer):
     assert set(skin["skin_tone"]) >= {"hex", "lab", "depth", "confidence", "label", "ita_degrees", "monk"}
     assert skin["undertone"]["value"] in {"warm", "cool", "neutral"} and skin["undertone"]["label"] == "estimate"
     assert skin["color_correction"]["method"] == "shades_of_gray" and skin["clusters"]
+    attributes = body["attributes"]  # Phase 4.4
+    assert attributes["face_shape"]["status"] == "ok" and attributes["face_shape"]["label"] == "estimate"
+    assert len(attributes["face_shape"]["alternatives"]) == 2
+    assert attributes["eye_color"]["status"] == "ok" and attributes["hair_color"]["status"] == "ok"
+    # The scan's estimates go straight into the recommendation engine.
+    recommended = client.post("/v1/recommendations", headers=auth, json=body["recommendation_features"])
+    assert recommended.status_code == 200, recommended.text
+    assert recommended.json()["features"]["face_shape"]["value"] == attributes["face_shape"]["value"]
     # Nothing internal leaks: no storage path, storage key, or user ID.
     assert str(storage) not in response.text and "storage_key" not in response.text
     assert session["user"]["id"] not in response.text
@@ -104,7 +112,7 @@ def test_rejections_return_problem_with_failed_scan(client, signup, storage, fac
     assert body["code"] == code and body["detail"]
     failed = body["scan"]
     assert failed["status"] == "failed" and failed["face_count"] == faces
-    assert failed["error"]["code"] == code and "landmarks" not in failed and "skin" not in failed
+    assert failed["error"]["code"] == code and not {"landmarks", "skin", "attributes"} & set(failed)
     assert "traceback" not in response.text.lower()
     # The failed scan is stored and retrievable.
     assert client.get(f"/v1/scans/{failed['id']}", headers=auth).json()["status"] == "failed"

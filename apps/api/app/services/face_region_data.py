@@ -115,4 +115,16 @@ REGION_LANDMARKS: dict[str, tuple[int, ...]] = {
     "right_face_edge": (127,),
     "left_jaw_angle": (288,),
     "right_jaw_angle": (58,),
+    "left_forehead_edge": (251,),
+    "right_forehead_edge": (21,),
+}
+
+# Eye contours (ordered rings) and irises (ring + centre), for eye-colour sampling.
+FEATURE_LANDMARKS: dict[str, tuple[int, ...]] = {
+    "left_eye": (249, 263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390),
+    "left_iris": (474, 475, 476, 477),
+    "left_iris_center": (473,),
+    "right_eye": (7, 33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163),
+    "right_iris": (469, 470, 471, 472),
+    "right_iris_center": (468,),
 }

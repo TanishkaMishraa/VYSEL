@@ -88,6 +88,20 @@ class Settings(BaseSettings):
     # Optional JSON {"points": [[L*, hue], ...]} fitted on validation data by scripts/evaluate_skin.py.
     skin_undertone_reference_path: Path | None = None
 
+    # ── Face shape and facial attributes (Phase 4.4) ──
+    # Untuned starting values; see FACIAL_ATTRIBUTES.md before changing any.
+    # Optional JSON {"prototypes": {shape: [4 floats]}, "spread": {...}} fitted on validation data
+    # by scripts/evaluate_attributes.py --fit-prototypes.
+    face_shape_prototypes_path: Path | None = None
+    eye_min_iris_radius_px: float = Field(default=4.0, gt=0)
+    eye_min_pixels: int = Field(default=20, ge=1)
+    hair_min_pixels: int = Field(default=500, ge=10)
+    # Above within-face skin variation (CIEDE2000 1.6-5.9 between regions on the test portrait).
+    hair_skin_delta_e: float = Field(default=8.0, gt=0)
+    hair_background_delta_e: float = Field(default=8.0, gt=0)
+    contrast_low_max_delta_l: float = Field(default=20.0, gt=0)
+    contrast_medium_max_delta_l: float = Field(default=40.0, gt=0)
+
     # ── Google OAuth (optional — the button hides itself when unset) ──
     google_client_id: str = ""
     google_client_secret: str = ""

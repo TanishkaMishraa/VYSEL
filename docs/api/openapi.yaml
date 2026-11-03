@@ -1262,6 +1262,10 @@ components:
             yaw: { type: number }
             roll: { type: number }
         skin: { $ref: '#/components/schemas/SkinAnalysis' }
+        attributes: { $ref: '#/components/schemas/FacialAttributes' }
+        recommendation_features:
+          oneOf: [{ $ref: '#/components/schemas/RecommendationFeatures' }, { type: 'null' }]
+          description: This scan's estimates in the request format of POST /recommendations and /reports; null when face shape or skin is unavailable.
         warnings:
           type: array
           items:
@@ -1291,6 +1295,79 @@ components:
         created_at: { $ref: '#/components/schemas/Timestamp' }
         expires_at: { $ref: '#/components/schemas/Timestamp' }
 
+    AttributeUnavailable:
+      type: object
+      required: [status, error]
+      properties:
+        status: { type: string, const: unavailable }
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum: [FACE_NOT_FULLY_VISIBLE, EYES_NOT_VISIBLE, HAIR_NOT_VISIBLE, HAIR_NOT_SEPARABLE]
+            message: { type: string }
+    ColorAttribute:
+      type: object
+      required: [status, value, confidence, label, hex, lab]
+      properties:
+        status: { type: string, const: ok }
+        value: { type: string }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        label: { $ref: '#/components/schemas/EstimateLabel' }
+        hex: { $ref: '#/components/schemas/HexColor' }
+        lab: { type: object, properties: { l: { type: number }, a: { type: number }, b: { type: number } } }
+        warnings:
+          type: array
+          items: { type: object, properties: { code: { type: string }, message: { type: string } } }
+    FacialAttributes:
+      type: object
+      description: Face shape, eye and hair colour, feature contrast (Phase 4.4). Details apps/api/FACIAL_ATTRIBUTES.md.
+      required: [face_shape, eye_color, hair_color]
+      properties:
+        face_shape:
+          oneOf:
+            - allOf:
+                - { $ref: '#/components/schemas/FaceShapeEstimate' }
+                - type: object
+                  properties:
+                    status: { type: string, const: ok }
+                    method: { type: string, examples: [landmark-prototypes-v1] }
+                    measurements:
+                      type: object
+                      properties:
+                        length_ratio: { type: number }
+                        forehead_ratio: { type: number }
+                        jaw_ratio: { type: number }
+                        chin_angle: { type: number }
+                    features: { type: object, additionalProperties: { type: number }, description: Deviations from MediaPipe's canonical face. }
+                    probabilities: { type: object, additionalProperties: { type: number } }
+            - { $ref: '#/components/schemas/AttributeUnavailable' }
+        eye_color:
+          oneOf:
+            - allOf:
+                - { $ref: '#/components/schemas/ColorAttribute' }
+                - type: object
+                  properties:
+                    value: { type: string, enum: [dark_brown, brown, hazel, green, blue, gray] }
+            - { $ref: '#/components/schemas/AttributeUnavailable' }
+        hair_color:
+          oneOf:
+            - allOf:
+                - { $ref: '#/components/schemas/ColorAttribute' }
+                - type: object
+                  properties:
+                    value: { type: string, enum: [black, dark_brown, brown, light_brown, blonde, red, gray, white, other] }
+            - { $ref: '#/components/schemas/AttributeUnavailable' }
+        contrast:
+          type: object
+          description: Lightness contrast between hair (else eyes) and skin.
+          properties:
+            value: { type: string, enum: [low, medium, high] }
+            confidence: { $ref: '#/components/schemas/Confidence' }
+            label: { $ref: '#/components/schemas/EstimateLabel' }
+            delta_l: { type: number }
+            source: { type: string, enum: [hair, eyes] }
     SkinAnalysis:
       type: object
       description: |

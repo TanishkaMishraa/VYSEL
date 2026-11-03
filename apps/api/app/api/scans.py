@@ -1,4 +1,4 @@
-"""Face scans for an uploaded selfie: one-face detection, landmarks and regions (Phase 4.2), skin tone and undertone (Phase 4.3)."""
+"""Face scans for an uploaded selfie: detection and landmarks (4.2), skin tone and undertone (4.3), face shape and attributes (4.4)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import schemas
 from app.api.images import CheckOut
 from app.config import get_settings
 from app.db import get_db, utcnow
@@ -18,10 +19,10 @@ from app.deps import current_user
 from app.errors import ApiError
 from app.models import FaceScan, ImageUpload, User
 from app.ratelimit import enforce
+from app.services.appearance import analyze_appearance
 from app.services.face_analysis import MODEL_NAME, FaceAnalysisError, FaceModelUnavailable, get_face_analyzer, load_oriented_rgb
 from app.services.image_storage import image_path
 from app.services.image_validation import ImageValidationError, validate_image
-from app.services.skin_analysis import SkinAnalysisUnavailable, analyze_skin
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/scans", tags=["Scans"])
@@ -181,6 +182,54 @@ class Skin(BaseModel):
     error: ScanError | None = None
 
 
+class ShapeAlternative(BaseModel):
+    value: Literal["oval", "round", "square", "heart", "oblong", "diamond"]
+    confidence: float
+
+
+class FaceShape(BaseModel):
+    status: Literal["ok", "unavailable"]
+    value: Literal["oval", "round", "square", "heart", "oblong", "diamond"] | None = None
+    confidence: float | None = None
+    label: Literal["estimate"] | None = None
+    alternatives: list[ShapeAlternative] | None = None
+    method: str | None = None
+    measurements: dict[str, float] | None = Field(default=None, description="Length/width, forehead/cheekbone, jaw/cheekbone, chin angle.")
+    features: dict[str, float] | None = Field(default=None, description="Deviations from MediaPipe's canonical face.")
+    probabilities: dict[str, float] | None = None
+    warnings: list[ScanWarning] = []
+    error: ScanError | None = None
+
+
+class ColorAttribute(BaseModel):
+    status: Literal["ok", "unavailable"]
+    value: str | None = None
+    confidence: float | None = None
+    label: Literal["estimate"] | None = None
+    hex: str | None = None
+    lab: Lab | None = None
+    eyes: dict[str, dict[str, Any]] | None = Field(default=None, description="Eye colour: per-eye sampling details.")
+    band_pixels: int | None = Field(default=None, description="Hair colour: pixels sampled around the head.")
+    background_delta_e: float | None = Field(default=None, description="Hair colour: CIEDE2000 from the background.")
+    warnings: list[ScanWarning] = []
+    error: ScanError | None = None
+
+
+class Contrast(BaseModel):
+    value: Literal["low", "medium", "high"]
+    confidence: float
+    label: Literal["estimate"]
+    delta_l: float
+    source: Literal["hair", "eyes"]
+
+
+class Attributes(BaseModel):
+    face_shape: FaceShape
+    eye_color: ColorAttribute
+    hair_color: ColorAttribute
+    contrast: Contrast | None = None
+
+
 class ScanOut(BaseModel):
     id: str
     image_id: str
@@ -193,6 +242,10 @@ class ScanOut(BaseModel):
     key_points: dict[str, KeyPoint] = {}
     head_pose: HeadPose | None = None
     skin: Skin | None = None
+    attributes: Attributes | None = None
+    recommendation_features: schemas.RecommendationFeatures | None = Field(
+        default=None, description="This scan's estimates in the input format of POST /v1/recommendations and /v1/reports."
+    )
     warnings: list[ScanWarning] = []
     error: ScanError | None = None
     validation: dict[str, CheckOut]
@@ -293,10 +346,8 @@ def create_scan(
         analysis = analyzer.analyze(rgb, orientation_corrected=orientation_corrected)
         result |= analysis.as_json()
         face_count, confidence = analysis.face_count, analysis.detection["confidence"]
-        try:
-            result["skin"] = analyze_skin(rgb, analysis, cfg)
-        except SkinAnalysisUnavailable as exc:  # The face scan still succeeds; skin is reported unavailable.
-            result["skin"] = exc.as_json()
+        # Skin (4.3), face shape and attributes (4.4); each part can be "unavailable" on its own.
+        result |= analyze_appearance(rgb, analysis, cfg)
     except FaceAnalysisError as exc:
         failure = exc
         result |= {"warnings": exc.warnings, "error": {"code": exc.code, "message": exc.message}}

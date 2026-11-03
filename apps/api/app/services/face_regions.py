@@ -40,6 +40,8 @@ _DESCRIPTIONS: dict[str, tuple[RegionKind, str]] = {
     "right_face_edge": ("point", "Widest point of the face oval on the subject's right."),
     "left_jaw_angle": ("point", "Face oval point level with the mouth corners, subject's left."),
     "right_jaw_angle": ("point", "Face oval point level with the mouth corners, subject's right."),
+    "left_forehead_edge": ("point", "Face oval point level with the top of the eyebrows, subject's left."),
+    "right_forehead_edge": ("point", "Face oval point level with the top of the eyebrows, subject's right."),
 }
 
 REGIONS: dict[str, RegionDefinition] = {

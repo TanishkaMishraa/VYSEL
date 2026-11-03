@@ -194,31 +194,58 @@ class _Region:
     median: np.ndarray
 
 
-def analyze_skin(rgb: np.ndarray, face: FaceAnalysis, settings: Settings | None = None) -> dict[str, Any]:
+@dataclass
+class Scene:
+    """An image prepared for colour measurement: linear light plus the white-balance correction."""
+
+    linear: np.ndarray  # (H, W, 3) linear sRGB, uncorrected
+    clipped: np.ndarray  # (H, W) pixels too bright or too dark to measure
+    gains: np.ndarray  # per-channel von Kries gains
+    correction: dict[str, Any]
+    face_mask: np.ndarray  # face oval enlarged 30% (hair, ears and neck included)
+    face_width: float
+    warnings: list[dict[str, str]]
+
+    def lab(self, mask: np.ndarray, limit: int | None = None) -> np.ndarray:
+        """White-balanced CIELAB of the unclipped pixels in `mask`; at most `limit`, evenly spaced."""
+        index = np.flatnonzero(mask & ~self.clipped)
+        if limit is not None and len(index) > limit:
+            index = index[np.linspace(0, len(index) - 1, limit).astype(int)]
+        return linear_to_lab(np.clip(self.linear.reshape(-1, 3)[index] * self.gains, 0, 1))
+
+
+def prepare_scene(rgb: np.ndarray, face: FaceAnalysis, settings: Settings | None = None) -> Scene:
+    """Estimate the white balance from everything outside the (enlarged) face. Shared by skin,
+    eye and hair colour so all of them use the same correction."""
+    cfg = settings or get_settings()
+    height, width = rgb.shape[:2]
+    if (width, height) != (face.image_width, face.image_height):
+        raise ValueError("The image does not match the face scan's dimensions")
+    clipped = np.any(rgb >= _CLIP_HIGH, axis=2) | np.all(rgb <= _CLIP_LOW, axis=2)
+    linear = srgb8_to_linear(rgb)
+    oval = np.asarray(face.regions["face_oval"]["polyline"])
+    centre = oval.mean(axis=0)
+    face_mask = _polygon_mask((centre + (oval - centre) * 1.3).tolist(), (height, width)).astype(bool)
+    gains, correction = estimate_white_balance(linear, ~face_mask & ~clipped, cfg)
+    warnings = []
+    if correction["applied"] and correction["reference_pixels"] < 0.05 * width * height:
+        warnings.append(_warning("WHITE_BALANCE_LIMITED", "Little background is visible, so colour correction is less reliable."))
+    if correction["clamped"]:
+        warnings.append(_warning("STRONG_COLOR_CAST", "The lighting has a strong colour tint; colour estimates are less reliable."))
+    face_width = float(oval[:, 0].max() - oval[:, 0].min())
+    return Scene(linear, clipped, gains, correction, face_mask, face_width, warnings)
+
+
+def analyze_skin(rgb: np.ndarray, face: FaceAnalysis, settings: Settings | None = None, scene: Scene | None = None) -> dict[str, Any]:
     """Estimate skin tone and undertone. `rgb` is the EXIF-oriented uint8 image the face scan used.
 
     Raises SkinAnalysisUnavailable when no usable skin is visible.
     """
     cfg = settings or get_settings()
+    scene = scene or prepare_scene(rgb, face, cfg)
     height, width = rgb.shape[:2]
-    if (width, height) != (face.image_width, face.image_height):
-        raise ValueError("The image does not match the face scan's dimensions")
-    warnings: list[dict[str, str]] = []
-
-    clipped = np.any(rgb >= _CLIP_HIGH, axis=2) | np.all(rgb <= _CLIP_LOW, axis=2)
-    linear = srgb8_to_linear(rgb)
-
-    # 1. White balance from everything outside the (slightly enlarged) face.
-    # The oval is enlarged by 30% about its centre to also keep hair, ears and neck out.
-    oval = np.asarray(face.regions["face_oval"]["polyline"])
-    face_width = float(oval[:, 0].max() - oval[:, 0].min())
-    centre = oval.mean(axis=0)
-    face_mask = _polygon_mask((centre + (oval - centre) * 1.3).tolist(), (height, width)).astype(bool)
-    gains, correction = estimate_white_balance(linear, ~face_mask & ~clipped, cfg)
-    if correction["applied"] and correction["reference_pixels"] < 0.05 * width * height:
-        warnings.append(_warning("WHITE_BALANCE_LIMITED", "Little background is visible, so colour correction is less reliable."))
-    if correction["clamped"]:
-        warnings.append(_warning("STRONG_COLOR_CAST", "The lighting has a strong colour tint; skin colour estimates are less reliable."))
+    gains, correction, face_width = scene.gains, scene.correction, scene.face_width
+    warnings: list[dict[str, str]] = list(scene.warnings)
 
     # 2. Skin pixels per visible region.
     erosion = max(1, round(face_width * cfg.skin_mask_erosion_ratio))
@@ -230,8 +257,7 @@ def analyze_skin(rgb: np.ndarray, face: FaceAnalysis, settings: Settings | None 
         if not geometry.get("visible"):
             report[name] = {"used": False, "reason": "not_visible", "pixels": 0}
             continue
-        mask = cv2.erode(_polygon_mask(geometry["polygon"], (height, width)), kernel).astype(bool) & ~clipped
-        lab = linear_to_lab(np.clip(linear[mask] * gains, 0, 1))  # corrected skin pixels only
+        lab = scene.lab(cv2.erode(_polygon_mask(geometry["polygon"], (height, width)), kernel).astype(bool))
         if len(lab) < cfg.skin_min_pixels_per_region:
             report[name] = {"used": False, "reason": "too_few_pixels", "pixels": int(len(lab))}
             continue
