@@ -1,0 +1,20 @@
+{
+  "name": "vysel",
+  "private": true,
+  "description": "VYSEL — AI-powered personal styling. Monorepo root.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @vysel/web",
+    "build": "npm run build -w @vysel/web",
+    "start": "npm run start -w @vysel/web",
+    "typecheck": "npm run typecheck -w @vysel/web && npm run typecheck -w @vysel/ui",
+    "brand:build": "node scripts/build-brand-assets.mjs",
+    "ds:validate": "node scripts/validate-design-system.mjs"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}

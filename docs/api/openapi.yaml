@@ -1,0 +1,1248 @@
+openapi: 3.1.0
+info:
+  title: VYSEL API
+  version: 0.1.0
+  summary: AI-powered personal styling — Style DNA from a single selfie.
+  description: |
+    Initial public contract for the VYSEL platform (Phase 1.1).
+
+    ## Conventions
+    - **Base path** — all routes are versioned under `/v1`. The web app reaches the API
+      through a same-origin proxy (`/api/v1/*` → `/v1/*`), so browsers never make
+      cross-origin calls.
+    - **Auth** — short-lived JWT access token in `Authorization: Bearer <token>`.
+      The refresh token lives only in an `HttpOnly` cookie scoped to `/v1/auth`.
+    - **IDs** — prefixed, opaque strings (`usr_`, `img_`, `anl_`). Do not parse them.
+    - **Timestamps** — RFC 3339, UTC.
+    - **Errors** — every non-2xx response is `application/problem+json`
+      ([RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)) with a stable,
+      machine-readable `code`. Clients branch on `code`, never on `detail`.
+    - **Async work** — analysis is asynchronous. `POST /analyses` returns `202` with a
+      `Location` and `Retry-After`; poll `GET /analyses/{analysis_id}` until the status
+      is terminal (`succeeded` or `failed`).
+    - **Idempotency** — `POST /analyses` accepts an `Idempotency-Key` header so retries
+      never start duplicate jobs.
+    - **Estimates, not truths** — every inferred feature carries a `confidence` and the
+      literal label `estimate`, matching the product's explainability principle.
+  contact:
+    name: Team Terrificers — VYSEL
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8000/v1
+    description: Local development
+  - url: https://api.vysel.app/v1
+    description: Production (placeholder hostname)
+
+tags:
+  - name: System
+    description: Health and readiness.
+  - name: Auth
+    description: Registration, login and session lifecycle.
+  - name: Profile
+    description: The signed-in user's profile and default style preferences.
+  - name: Images
+    description: Consent-gated, direct-to-storage selfie uploads.
+  - name: Analyses
+    description: Asynchronous Style DNA analysis jobs and their results.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Liveness and dependency status
+      description: Unauthenticated. Returns `503` when a hard dependency (database, queue) is down.
+      security: []
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+              example:
+                status: ok
+                version: 0.1.0
+                checks: { database: ok, queue: ok, storage: ok }
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  # ─────────────────────────────── Auth ───────────────────────────────
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Create an account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+            example:
+              email: tanya@example.com
+              password: correct-horse-battery
+              display_name: Tanya
+      responses:
+        '201':
+          description: Account created and signed in.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+              examples:
+                created: { $ref: '#/components/examples/AuthSession' }
+        '409':
+          description: Email already registered.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://docs.vysel.app/errors/email-taken
+                title: Email already registered
+                status: 409
+                code: EMAIL_TAKEN
+                detail: An account with this email already exists.
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Sign in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example:
+              email: tanya@example.com
+              password: correct-horse-battery
+      responses:
+        '200':
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+              examples:
+                ok: { $ref: '#/components/examples/AuthSession' }
+        '401':
+          description: Wrong email or password. Deliberately does not reveal which.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://docs.vysel.app/errors/invalid-credentials
+                title: Invalid credentials
+                status: 401
+                code: INVALID_CREDENTIALS
+                detail: Email or password is incorrect.
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshSession
+      summary: Rotate the refresh token and issue a new access token
+      description: |
+        Reads the `vysel_refresh` cookie. Refresh tokens are single-use: each call
+        rotates the cookie. Re-use of an already-rotated token revokes the whole
+        token family (theft detection) and returns `401`.
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: New session issued.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+              examples:
+                ok: { $ref: '#/components/examples/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Revoke the current refresh token and clear the cookie
+      security:
+        - refreshCookie: []
+      responses:
+        '204':
+          description: Signed out. Idempotent — succeeds even if already signed out.
+          headers:
+            Set-Cookie:
+              description: Expires the `vysel_refresh` cookie.
+              schema: { type: string }
+
+  # ─────────────────────────────── Profile ───────────────────────────────
+  /me:
+    get:
+      tags: [Profile]
+      operationId: getMe
+      summary: Get the signed-in user's profile
+      responses:
+        '200':
+          description: Profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+              examples:
+                profile: { $ref: '#/components/examples/Profile' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Profile]
+      operationId: updateMe
+      summary: Update profile and default preferences
+      description: |
+        Partial update (JSON Merge Patch semantics, RFC 7396): omitted fields are left
+        unchanged; `null` clears an optional field. Preferences saved here are the
+        defaults applied to new analyses.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileUpdate' }
+            example:
+              display_name: Tanya M.
+              preferences:
+                budget: mid
+                style: everyday
+      responses:
+        '200':
+          description: Updated profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+              examples:
+                profile: { $ref: '#/components/examples/Profile' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Profile]
+      operationId: deleteMe
+      summary: Delete account and all associated data
+      description: |
+        Revokes all sessions immediately, then erases the account, analyses, results
+        and any stored images. Object-storage deletion completes asynchronously
+        (within 24 h) but data is inaccessible from the moment this returns.
+      responses:
+        '204':
+          description: Account scheduled for erasure.
+          headers:
+            Set-Cookie:
+              description: Expires the `vysel_refresh` cookie.
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  # ─────────────────────────────── Images ───────────────────────────────
+  /images:
+    post:
+      tags: [Images]
+      operationId: createImageUpload
+      summary: Create an upload intent and get a presigned upload URL
+      description: |
+        Step 1 of 2. Records explicit consent, reserves an image ID and returns a
+        short-lived (5 min) presigned `PUT` URL. The client uploads the bytes
+        **directly to object storage** — they never pass through the API — then calls
+        `POST /images/{image_id}/complete`.
+
+        The signature binds `Content-Type` and `Content-Length`, so the upload must
+        match the declared `content_type` and `size_bytes` exactly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateImageRequest' }
+            example:
+              content_type: image/jpeg
+              size_bytes: 482113
+              retention: ephemeral
+              consent:
+                image_processing: true
+                policy_version: '2026-11-01'
+      responses:
+        '201':
+          description: Upload intent created.
+          headers:
+            Location:
+              description: URL of the new image resource.
+              schema: { type: string, format: uri-reference }
+              example: /v1/images/img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageUploadIntent' }
+              example:
+                image:
+                  id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+                  status: pending_upload
+                  content_type: image/jpeg
+                  size_bytes: 482113
+                  width: null
+                  height: null
+                  retention: ephemeral
+                  expires_at: '2026-11-03T10:05:00Z'
+                  created_at: '2026-11-03T10:00:00Z'
+                upload:
+                  method: PUT
+                  url: https://uploads.vysel.app/selfies/usr_01JC3X/img_01JC3Y8M2Q7W4B9T6N5R0KXH2D?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=…
+                  headers:
+                    Content-Type: image/jpeg
+                  expires_at: '2026-11-03T10:05:00Z'
+        '400':
+          description: Consent was not given.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://docs.vysel.app/errors/consent-required
+                title: Consent required
+                status: 400
+                code: CONSENT_REQUIRED
+                detail: Image processing consent must be granted before uploading.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /images/{image_id}:
+    parameters:
+      - $ref: '#/components/parameters/ImageId'
+    get:
+      tags: [Images]
+      operationId: getImage
+      summary: Get image metadata
+      description: Metadata only. Image bytes are never served back through the public API.
+      responses:
+        '200':
+          description: Image metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Image' }
+              examples:
+                uploaded: { $ref: '#/components/examples/ImageUploaded' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Images]
+      operationId: deleteImage
+      summary: Delete an image immediately
+      description: |
+        Removes the stored object. Analyses and results derived from the image are
+        kept (they contain no pixels). Idempotent.
+      responses:
+        '204': { description: Deleted. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /images/{image_id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/ImageId'
+    post:
+      tags: [Images]
+      operationId: completeImageUpload
+      summary: Confirm the upload finished
+      description: |
+        Step 2 of 2. The API checks the object exists in storage and that its size and
+        content type match the intent. Deep checks (magic bytes, decode, face quality)
+        happen in the worker during analysis. Idempotent once `uploaded`.
+      responses:
+        '200':
+          description: Upload confirmed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Image' }
+              examples:
+                uploaded: { $ref: '#/components/examples/ImageUploaded' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Object missing, mismatched, or the upload window expired.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                missing:
+                  value:
+                    type: https://docs.vysel.app/errors/upload-incomplete
+                    title: Upload not found
+                    status: 409
+                    code: UPLOAD_INCOMPLETE
+                    detail: No object was found for this image. Upload the file, then retry.
+                expired:
+                  value:
+                    type: https://docs.vysel.app/errors/upload-expired
+                    title: Upload window expired
+                    status: 409
+                    code: UPLOAD_EXPIRED
+                    detail: Create a new upload intent and try again.
+
+  # ─────────────────────────────── Analyses ───────────────────────────────
+  /analyses:
+    post:
+      tags: [Analyses]
+      operationId: createAnalysis
+      summary: Start a Style DNA analysis
+      description: |
+        Enqueues an asynchronous analysis for an uploaded image. Preferences in the
+        body override the profile defaults for this run only.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAnalysisRequest' }
+            example:
+              image_id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+              preferences:
+                budget: mid
+                style: everyday
+                categories: [hair, eyewear, makeup]
+      responses:
+        '202':
+          description: Analysis accepted and queued.
+          headers:
+            Location:
+              description: Poll this URL for status.
+              schema: { type: string, format: uri-reference }
+              example: /v1/analyses/anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ
+            Retry-After: { $ref: '#/components/headers/RetryAfter' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Analysis' }
+              examples:
+                queued: { $ref: '#/components/examples/AnalysisQueued' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Image not ready, or Idempotency-Key reused with a different body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                imageNotReady:
+                  value:
+                    type: https://docs.vysel.app/errors/image-not-ready
+                    title: Image not ready
+                    status: 409
+                    code: IMAGE_NOT_READY
+                    detail: Complete the upload before starting an analysis.
+                idempotencyConflict:
+                  value:
+                    type: https://docs.vysel.app/errors/idempotency-conflict
+                    title: Idempotency key conflict
+                    status: 409
+                    code: IDEMPOTENCY_CONFLICT
+                    detail: This Idempotency-Key was already used with a different request body.
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    get:
+      tags: [Analyses]
+      operationId: listAnalyses
+      summary: List the user's analyses, newest first
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: cursor
+          in: query
+          description: Opaque cursor from a previous page's `next_cursor`.
+          schema: { type: string, maxLength: 256 }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AnalysisStatus' }
+      responses:
+        '200':
+          description: A page of analyses.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalysisPage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /analyses/{analysis_id}:
+    parameters:
+      - $ref: '#/components/parameters/AnalysisId'
+    get:
+      tags: [Analyses]
+      operationId: getAnalysis
+      summary: Get analysis status and progress
+      description: |
+        Poll this endpoint. While non-terminal, the response includes `Retry-After`
+        (seconds). `stage` and `progress` drive the step-by-step loading experience.
+      responses:
+        '200':
+          description: Current analysis state.
+          headers:
+            Retry-After:
+              description: Present only while the status is `queued` or `processing`.
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Analysis' }
+              examples:
+                processing: { $ref: '#/components/examples/AnalysisProcessing' }
+                succeeded: { $ref: '#/components/examples/AnalysisSucceeded' }
+                retakeNeeded: { $ref: '#/components/examples/AnalysisFailedRetake' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Analyses]
+      operationId: deleteAnalysis
+      summary: Delete an analysis and its result
+      responses:
+        '204': { description: Deleted. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analyses/{analysis_id}/result:
+    parameters:
+      - $ref: '#/components/parameters/AnalysisId'
+    get:
+      tags: [Analyses]
+      operationId: getAnalysisResult
+      summary: Get the Style DNA result
+      responses:
+        '200':
+          description: The Style DNA report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StyleDNA' }
+              examples:
+                styleDna: { $ref: '#/components/examples/StyleDNA' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The analysis has not succeeded (still running, or failed).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: https://docs.vysel.app/errors/analysis-not-ready
+                title: Result not available
+                status: 409
+                code: ANALYSIS_NOT_READY
+                detail: Analysis is still processing. Poll the analysis until it succeeds.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from an `AuthSession`. Lifetime 15 minutes.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: vysel_refresh
+      description: Opaque, single-use refresh token. `HttpOnly; Secure; SameSite=Strict; Path=/v1/auth`. Lifetime 30 days.
+
+  parameters:
+    ImageId:
+      name: image_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ImageId' }
+    AnalysisId:
+      name: analysis_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/AnalysisId' }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Client-generated unique key (UUID recommended). Remembered for 24 h per user.
+      schema: { type: string, minLength: 8, maxLength: 64, pattern: '^[A-Za-z0-9_-]+$' }
+      example: 5f0c2a8e-7c1b-4d0e-9b8a-2f6d1e3c4b5a
+
+  headers:
+    SetRefreshCookie:
+      description: Sets/rotates the `vysel_refresh` cookie.
+      schema: { type: string }
+      example: vysel_refresh=rt_…; HttpOnly; Secure; SameSite=Strict; Path=/v1/auth; Max-Age=2592000
+    RetryAfter:
+      description: Suggested seconds to wait before the next request.
+      schema: { type: integer, minimum: 1 }
+      example: 2
+
+  responses:
+    ValidationError:
+      description: Request failed validation.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://docs.vysel.app/errors/validation
+            title: Validation failed
+            status: 422
+            code: VALIDATION_ERROR
+            detail: One or more fields are invalid.
+            errors:
+              - field: password
+                message: Must be at least 10 characters.
+                code: too_short
+    Unauthenticated:
+      description: Missing, invalid or expired credentials.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://docs.vysel.app/errors/unauthenticated
+            title: Authentication required
+            status: 401
+            code: UNAUTHENTICATED
+            detail: Access token is missing or expired.
+    NotFound:
+      description: Resource does not exist or is not owned by the caller (indistinguishable by design).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://docs.vysel.app/errors/not-found
+            title: Not found
+            status: 404
+            code: NOT_FOUND
+    PayloadTooLarge:
+      description: Declared size exceeds the 10 MiB limit.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://docs.vysel.app/errors/payload-too-large
+            title: Image too large
+            status: 413
+            code: PAYLOAD_TOO_LARGE
+            detail: Images must be 10 MiB or smaller.
+    UnsupportedMediaType:
+      description: Content type not accepted.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://docs.vysel.app/errors/unsupported-media-type
+            title: Unsupported image type
+            status: 415
+            code: UNSUPPORTED_MEDIA_TYPE
+            detail: Use JPEG, PNG or WebP.
+    RateLimited:
+      description: Too many requests.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://docs.vysel.app/errors/rate-limited
+            title: Too many requests
+            status: 429
+            code: RATE_LIMITED
+            detail: Try again in 30 seconds.
+    ServiceUnavailable:
+      description: A dependency is unavailable; safe to retry later.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://docs.vysel.app/errors/service-unavailable
+            title: Service unavailable
+            status: 503
+            code: SERVICE_UNAVAILABLE
+
+  schemas:
+    # ── Identifiers & shared primitives ──
+    UserId:
+      type: string
+      pattern: '^usr_[0-9A-HJKMNP-TV-Z]{26}$'
+      examples: [usr_01JC3X0A1B2C3D4E5F6G7H8J9K]
+    ImageId:
+      type: string
+      pattern: '^img_[0-9A-HJKMNP-TV-Z]{26}$'
+      examples: [img_01JC3Y8M2Q7W4B9T6N5R0KXH2D]
+    AnalysisId:
+      type: string
+      pattern: '^anl_[0-9A-HJKMNP-TV-Z]{26}$'
+      examples: [anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ]
+    Timestamp:
+      type: string
+      format: date-time
+    HexColor:
+      type: string
+      pattern: '^#[0-9A-F]{6}$'
+      examples: ['#C27C88']
+    Confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: Calibrated-as-possible confidence. UI shows < 0.5 as "low confidence".
+
+    # ── Errors ──
+    Problem:
+      type: object
+      description: RFC 9457 problem details, extended with a stable `code`.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        detail: { type: string }
+        instance: { type: string, description: Request path. }
+        request_id: { type: string, description: Correlates with server logs (`X-Request-ID`). }
+        errors:
+          type: array
+          description: Field-level details for `VALIDATION_ERROR`.
+          items: { $ref: '#/components/schemas/FieldError' }
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field: { type: string, description: Dot path, e.g. `preferences.budget`. }
+        message: { type: string }
+        code: { type: string, description: Machine-readable rule, e.g. `too_short`. }
+    ErrorCode:
+      type: string
+      enum:
+        - VALIDATION_ERROR
+        - UNAUTHENTICATED
+        - INVALID_CREDENTIALS
+        - FORBIDDEN
+        - NOT_FOUND
+        - EMAIL_TAKEN
+        - CONSENT_REQUIRED
+        - PAYLOAD_TOO_LARGE
+        - UNSUPPORTED_MEDIA_TYPE
+        - UPLOAD_INCOMPLETE
+        - UPLOAD_EXPIRED
+        - IMAGE_NOT_READY
+        - ANALYSIS_NOT_READY
+        - IDEMPOTENCY_CONFLICT
+        - RATE_LIMITED
+        - SERVICE_UNAVAILABLE
+        - INTERNAL_ERROR
+
+    # ── System ──
+    Health:
+      type: object
+      required: [status, version, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded, down] }
+        version: { type: string }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [ok, down] }
+
+    # ── Auth ──
+    Email:
+      type: string
+      format: email
+      maxLength: 254
+    Password:
+      type: string
+      minLength: 10
+      maxLength: 128
+      writeOnly: true
+      description: Checked against a breached-password list on registration.
+    DisplayName:
+      type: string
+      minLength: 1
+      maxLength: 50
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, display_name]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+        password: { $ref: '#/components/schemas/Password' }
+        display_name: { $ref: '#/components/schemas/DisplayName' }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { $ref: '#/components/schemas/Email' }
+        password: { type: string, minLength: 1, maxLength: 128, writeOnly: true }
+    AuthSession:
+      type: object
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token: { type: string, description: JWT. Keep in memory only — never in localStorage. }
+        token_type: { type: string, const: Bearer }
+        expires_in: { type: integer, description: Seconds until the access token expires., examples: [900] }
+        user: { $ref: '#/components/schemas/Profile' }
+
+    # ── Profile ──
+    Budget:
+      type: string
+      enum: [low, mid, high]
+    StylePreference:
+      type: string
+      enum: [everyday, minimal, classic, bold, formal]
+    Category:
+      type: string
+      description: |
+        Recommendation category. MVP ships `hair`, `eyewear`, `makeup`. Clients must
+        tolerate unknown values (future: `outfit`, `accessories`).
+      enum: [hair, eyewear, makeup]
+    Preferences:
+      type: object
+      additionalProperties: false
+      properties:
+        budget: { $ref: '#/components/schemas/Budget' }
+        style: { $ref: '#/components/schemas/StylePreference' }
+        categories:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/Category' }
+    Profile:
+      type: object
+      required: [id, email, display_name, preferences, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/UserId' }
+        email: { $ref: '#/components/schemas/Email' }
+        display_name: { $ref: '#/components/schemas/DisplayName' }
+        preferences: { $ref: '#/components/schemas/Preferences' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    ProfileUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: { $ref: '#/components/schemas/DisplayName' }
+        preferences:
+          type: object
+          additionalProperties: false
+          description: Merge-patched into stored preferences; `null` clears a key.
+          properties:
+            budget: { oneOf: [{ $ref: '#/components/schemas/Budget' }, { type: 'null' }] }
+            style: { oneOf: [{ $ref: '#/components/schemas/StylePreference' }, { type: 'null' }] }
+            categories:
+              oneOf:
+                - type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items: { $ref: '#/components/schemas/Category' }
+                - type: 'null'
+
+    # ── Images ──
+    ImageContentType:
+      type: string
+      enum: [image/jpeg, image/png, image/webp]
+    Retention:
+      type: string
+      enum: [ephemeral, retained]
+      default: ephemeral
+      description: |
+        `ephemeral` (default): deleted right after analysis, and in any case within 24 h.
+        `retained`: kept until the user deletes it — required for future try-on features.
+    Consent:
+      type: object
+      additionalProperties: false
+      required: [image_processing, policy_version]
+      properties:
+        image_processing:
+          type: boolean
+          const: true
+          description: Must be `true`. The server records who consented, when, and to which policy.
+        policy_version: { type: string, maxLength: 32, examples: ['2026-11-01'] }
+    CreateImageRequest:
+      type: object
+      additionalProperties: false
+      required: [content_type, size_bytes, consent]
+      properties:
+        content_type: { $ref: '#/components/schemas/ImageContentType' }
+        size_bytes:
+          type: integer
+          minimum: 10240
+          maximum: 10485760
+          description: Exact byte size of the file to upload (10 KiB – 10 MiB).
+        retention: { $ref: '#/components/schemas/Retention' }
+        consent: { $ref: '#/components/schemas/Consent' }
+    ImageStatus:
+      type: string
+      enum: [pending_upload, uploaded, deleted]
+    Image:
+      type: object
+      required: [id, status, content_type, size_bytes, width, height, retention, expires_at, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/ImageId' }
+        status: { $ref: '#/components/schemas/ImageStatus' }
+        content_type: { $ref: '#/components/schemas/ImageContentType' }
+        size_bytes: { type: integer }
+        width: { type: [integer, 'null'], description: Set after the worker decodes the image. }
+        height: { type: [integer, 'null'] }
+        retention: { $ref: '#/components/schemas/Retention' }
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the image will be auto-deleted. `null` for `retained` images.
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    UploadInstructions:
+      type: object
+      required: [method, url, headers, expires_at]
+      properties:
+        method: { type: string, const: PUT }
+        url: { type: string, format: uri, description: Presigned object-storage URL. }
+        headers:
+          type: object
+          description: Headers the client must send verbatim with the upload.
+          additionalProperties: { type: string }
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
+    ImageUploadIntent:
+      type: object
+      required: [image, upload]
+      properties:
+        image: { $ref: '#/components/schemas/Image' }
+        upload: { $ref: '#/components/schemas/UploadInstructions' }
+
+    # ── Analyses ──
+    CreateAnalysisRequest:
+      type: object
+      additionalProperties: false
+      required: [image_id]
+      properties:
+        image_id: { $ref: '#/components/schemas/ImageId' }
+        preferences:
+          $ref: '#/components/schemas/Preferences'
+          description: Overrides profile defaults for this analysis only.
+    AnalysisStatus:
+      type: string
+      enum: [queued, processing, succeeded, failed]
+      description: '`succeeded` and `failed` are terminal.'
+    AnalysisStage:
+      type: string
+      description: Pipeline step currently running. Drives the progress UI.
+      enum:
+        - quality_check
+        - landmarks
+        - face_geometry
+        - skin_tone
+        - recommendations
+        - finalizing
+    AnalysisFailureCode:
+      type: string
+      enum:
+        - IMAGE_UNREADABLE
+        - IMAGE_TOO_DARK
+        - IMAGE_OVEREXPOSED
+        - IMAGE_BLURRY
+        - NO_FACE_DETECTED
+        - MULTIPLE_FACES
+        - FACE_TOO_SMALL
+        - FACE_NOT_FRONTAL
+        - FACE_OCCLUDED
+        - IMAGE_EXPIRED
+        - PROCESSING_ERROR
+        - TIMEOUT
+    AnalysisFailure:
+      type: object
+      required: [code, message, retake_recommended]
+      properties:
+        code: { $ref: '#/components/schemas/AnalysisFailureCode' }
+        message: { type: string, description: User-safe explanation. }
+        hint: { type: string, description: Actionable retake guidance. }
+        retake_recommended:
+          type: boolean
+          description: '`true` for photo-quality failures — show the retake flow instead of a generic error.'
+    Analysis:
+      type: object
+      required: [id, image_id, status, stage, progress, preferences, failure, created_at, started_at, completed_at]
+      properties:
+        id: { $ref: '#/components/schemas/AnalysisId' }
+        image_id: { $ref: '#/components/schemas/ImageId' }
+        status: { $ref: '#/components/schemas/AnalysisStatus' }
+        stage:
+          oneOf: [{ $ref: '#/components/schemas/AnalysisStage' }, { type: 'null' }]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        preferences:
+          $ref: '#/components/schemas/Preferences'
+          description: Effective preferences (profile defaults merged with overrides).
+        failure:
+          oneOf: [{ $ref: '#/components/schemas/AnalysisFailure' }, { type: 'null' }]
+        result_url:
+          type: [string, 'null']
+          format: uri-reference
+          description: Set once `succeeded`.
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        started_at: { type: [string, 'null'], format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+    AnalysisPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Analysis' }
+        next_cursor: { type: [string, 'null'] }
+
+    # ── Style DNA ──
+    FaceShape:
+      type: string
+      enum: [oval, round, square, heart, oblong, diamond]
+    Undertone:
+      type: string
+      enum: [warm, cool, neutral, olive]
+    SkinDepth:
+      type: string
+      enum: [fair, light, medium, tan, deep]
+    EstimateLabel:
+      type: string
+      const: estimate
+    FaceShapeEstimate:
+      type: object
+      required: [value, confidence, label]
+      properties:
+        value: { $ref: '#/components/schemas/FaceShape' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        label: { $ref: '#/components/schemas/EstimateLabel' }
+        alternatives:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required: [value, confidence]
+            properties:
+              value: { $ref: '#/components/schemas/FaceShape' }
+              confidence: { $ref: '#/components/schemas/Confidence' }
+    UndertoneEstimate:
+      type: object
+      required: [value, confidence, label]
+      properties:
+        value: { $ref: '#/components/schemas/Undertone' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        label: { $ref: '#/components/schemas/EstimateLabel' }
+    SkinTone:
+      type: object
+      required: [hex, lab, depth, confidence, label]
+      properties:
+        hex: { $ref: '#/components/schemas/HexColor' }
+        lab:
+          type: object
+          description: CIE L*a*b* of the dominant skin cluster.
+          required: [l, a, b]
+          properties:
+            l: { type: number, minimum: 0, maximum: 100 }
+            a: { type: number, minimum: -128, maximum: 127 }
+            b: { type: number, minimum: -128, maximum: 127 }
+        depth: { $ref: '#/components/schemas/SkinDepth' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        label: { $ref: '#/components/schemas/EstimateLabel' }
+    PaletteColor:
+      type: object
+      required: [name, hex, role]
+      properties:
+        name: { type: string, examples: [Rose] }
+        hex: { $ref: '#/components/schemas/HexColor' }
+        role: { type: string, enum: [base, accent, neutral] }
+    Pick:
+      type: object
+      required: [id, label, score, reason]
+      properties:
+        id: { type: string, description: Stable catalogue ID — future links to products/try-on assets., examples: [hair.soft_layers] }
+        label: { type: string, examples: [Soft layers] }
+        score: { type: number, minimum: 0, maximum: 1, description: Rule score combining fit, preference and budget. }
+        reason: { type: string, description: One-line explanation shown to the user. }
+        tags: { type: array, items: { type: string } }
+    CategoryRecommendations:
+      type: object
+      required: [category, picks]
+      properties:
+        category: { $ref: '#/components/schemas/Category' }
+        picks:
+          type: array
+          minItems: 1
+          maxItems: 5
+          description: Ranked, best first.
+          items: { $ref: '#/components/schemas/Pick' }
+        avoid:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/Pick' }
+    StyleDNA:
+      type: object
+      description: |
+        The Style DNA report. Additive-only evolution: new optional fields and new
+        categories may appear; existing fields never change meaning.
+      required: [analysis_id, schema_version, generated_at, engine, features, palette, recommendations, summary, disclaimers]
+      properties:
+        analysis_id: { $ref: '#/components/schemas/AnalysisId' }
+        schema_version: { type: string, const: '1' }
+        generated_at: { $ref: '#/components/schemas/Timestamp' }
+        engine:
+          type: object
+          description: Versions that produced this result — enables reproducibility and A/B comparison.
+          required: [pipeline_version, ruleset_version]
+          properties:
+            pipeline_version: { type: string, examples: [cv-0.1.0] }
+            ruleset_version: { type: string, examples: [rules-2026.11.0] }
+        features:
+          type: object
+          required: [face_shape, undertone, skin_tone]
+          properties:
+            face_shape: { $ref: '#/components/schemas/FaceShapeEstimate' }
+            undertone: { $ref: '#/components/schemas/UndertoneEstimate' }
+            skin_tone: { $ref: '#/components/schemas/SkinTone' }
+        palette:
+          type: array
+          minItems: 3
+          maxItems: 8
+          items: { $ref: '#/components/schemas/PaletteColor' }
+        recommendations:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/CategoryRecommendations' }
+        summary: { type: string, description: '"Why it suits you" narrative.' }
+        disclaimers:
+          type: array
+          items: { type: string }
+
+  examples:
+    Profile:
+      value:
+        id: usr_01JC3X0A1B2C3D4E5F6G7H8J9K
+        email: tanya@example.com
+        display_name: Tanya
+        preferences: { budget: mid, style: everyday, categories: [hair, eyewear, makeup] }
+        created_at: '2026-11-03T09:58:00Z'
+        updated_at: '2026-11-03T09:58:00Z'
+    AuthSession:
+      value:
+        access_token: eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3JfMDFKQzNYIn0.c2lnbmF0dXJl
+        token_type: Bearer
+        expires_in: 900
+        user:
+          id: usr_01JC3X0A1B2C3D4E5F6G7H8J9K
+          email: tanya@example.com
+          display_name: Tanya
+          preferences: { budget: mid, style: everyday, categories: [hair, eyewear, makeup] }
+          created_at: '2026-11-03T09:58:00Z'
+          updated_at: '2026-11-03T09:58:00Z'
+    ImageUploaded:
+      value:
+        id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+        status: uploaded
+        content_type: image/jpeg
+        size_bytes: 482113
+        width: null
+        height: null
+        retention: ephemeral
+        expires_at: '2026-11-04T10:00:00Z'
+        created_at: '2026-11-03T10:00:00Z'
+    AnalysisQueued:
+      value:
+        id: anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ
+        image_id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+        status: queued
+        stage: null
+        progress: 0
+        preferences: { budget: mid, style: everyday, categories: [hair, eyewear, makeup] }
+        failure: null
+        result_url: null
+        created_at: '2026-11-03T10:00:12Z'
+        started_at: null
+        completed_at: null
+    AnalysisProcessing:
+      value:
+        id: anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ
+        image_id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+        status: processing
+        stage: skin_tone
+        progress: 60
+        preferences: { budget: mid, style: everyday, categories: [hair, eyewear, makeup] }
+        failure: null
+        result_url: null
+        created_at: '2026-11-03T10:00:12Z'
+        started_at: '2026-11-03T10:00:13Z'
+        completed_at: null
+    AnalysisSucceeded:
+      value:
+        id: anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ
+        image_id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+        status: succeeded
+        stage: null
+        progress: 100
+        preferences: { budget: mid, style: everyday, categories: [hair, eyewear, makeup] }
+        failure: null
+        result_url: /v1/analyses/anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ/result
+        created_at: '2026-11-03T10:00:12Z'
+        started_at: '2026-11-03T10:00:13Z'
+        completed_at: '2026-11-03T10:00:16Z'
+    AnalysisFailedRetake:
+      value:
+        id: anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ
+        image_id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
+        status: failed
+        stage: null
+        progress: 100
+        preferences: { budget: mid, style: everyday, categories: [hair, eyewear, makeup] }
+        failure:
+          code: IMAGE_TOO_DARK
+          message: Your photo is too dark for an accurate skin-tone estimate.
+          hint: Face a window or a soft light source and retake.
+          retake_recommended: true
+        result_url: null
+        created_at: '2026-11-03T10:00:12Z'
+        started_at: '2026-11-03T10:00:13Z'
+        completed_at: '2026-11-03T10:00:14Z'
+    StyleDNA:
+      value:
+        analysis_id: anl_01JC3YB7F0H2K5M8P1S4V7Y0ZQ
+        schema_version: '1'
+        generated_at: '2026-11-03T10:00:16Z'
+        engine: { pipeline_version: cv-0.1.0, ruleset_version: rules-2026.11.0 }
+        features:
+          face_shape:
+            value: oval
+            confidence: 0.72
+            label: estimate
+            alternatives: [{ value: oblong, confidence: 0.18 }]
+          undertone: { value: neutral, confidence: 0.64, label: estimate }
+          skin_tone:
+            hex: '#C99A82'
+            lab: { l: 67.4, a: 12.1, b: 18.6 }
+            depth: medium
+            confidence: 0.81
+            label: estimate
+        palette:
+          - { name: Rose, hex: '#C27C88', role: accent }
+          - { name: Sage, hex: '#9CAF88', role: base }
+          - { name: Navy, hex: '#1F2A44', role: neutral }
+          - { name: Plum, hex: '#6E3B5C', role: accent }
+          - { name: Cream, hex: '#F3E9D2', role: neutral }
+        recommendations:
+          - category: hair
+            picks:
+              - { id: hair.soft_layers, label: Soft layers, score: 0.91, reason: Balanced proportions carry layered volume without widening the face. }
+              - { id: hair.long_waves, label: Long waves, score: 0.86, reason: Vertical movement complements an oval outline. }
+          - category: eyewear
+            picks:
+              - { id: eyewear.slim_rectangle, label: Slim rectangle, score: 0.88, reason: Gentle angles add definition to soft, balanced features. }
+              - { id: eyewear.soft_round, label: Soft round, score: 0.79, reason: Matches the face's natural curves for an easy everyday look. }
+          - category: makeup
+            picks:
+              - { id: makeup.lip.rose, label: Rose, score: 0.9, reason: Muted pink sits well on a neutral undertone. }
+              - { id: makeup.lip.berry, label: Berry, score: 0.84, reason: Deeper accent within your palette for evenings. }
+              - { id: makeup.lip.peach, label: Peach, score: 0.77, reason: Light, warm-leaning option within budget. }
+        summary: Balanced proportions suit most cuts, and soft, muted shades suit a neutral undertone.
+        disclaimers:
+          - Estimates from a single photo; lighting and camera can shift results.
+          - Guidance, not objective truth — adjust preferences to explore alternatives.

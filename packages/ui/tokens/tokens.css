@@ -1,0 +1,246 @@
+/* ==========================================================================
+   VYSEL Design Tokens — single source of truth.
+   Layer 1  Primitives  (--vy-<palette>-<step>)    raw values, never used in components
+   Layer 2  Semantic    (--vy-<role>)              what components consume; themed
+   Semantic colours are space-separated RGB channels so they work with alpha:
+     color: rgb(var(--vy-text));  background: rgb(var(--vy-accent) / 0.12);
+   Themes: Obsidian (default, dark) and Porcelain (light).
+   ========================================================================== */
+
+:root {
+  /* ── Primitives · colour ───────────────────────────────────────────────── */
+  /* Obsidian — warm, faintly violet near-blacks */
+  --vy-obsidian-950: 11 10 12;     /* #0B0A0C */
+  --vy-obsidian-900: 20 18 21;     /* #141215 */
+  --vy-obsidian-800: 29 26 30;     /* #1D1A1E */
+  --vy-obsidian-700: 42 38 43;     /* #2A262B */
+  --vy-obsidian-600: 61 56 62;     /* #3D383E */
+  --vy-obsidian-500: 110 103 111;  /* #6E676F — ≥3:1 on obsidian-950 (input boundaries) */
+
+  /* Porcelain — warm ivories */
+  --vy-porcelain-50:  252 249 245; /* #FCF9F5 */
+  --vy-porcelain-100: 247 241 234; /* #F7F1EA */
+  --vy-porcelain-200: 237 228 217; /* #EDE4D9 */
+  --vy-porcelain-300: 220 208 194; /* #DCD0C2 */
+  --vy-porcelain-400: 176 164 152; /* #B0A498 */
+
+  /* Rose gold — the single accent */
+  --vy-rose-gold-200: 242 218 205; /* #F2DACD */
+  --vy-rose-gold-300: 233 198 179; /* #E9C6B3 */
+  --vy-rose-gold-400: 217 166 141; /* #D9A68D */
+  --vy-rose-gold-500: 196 138 115; /* #C48A73 */
+  --vy-rose-gold-600: 168 111 90;  /* #A86F5A */
+  --vy-rose-gold-700: 138 87 67;   /* #8A5743 */
+  --vy-rose-gold-800: 108 66 50;   /* #6C4232 */
+
+  /* Complementary */
+  --vy-champagne-300: 233 216 190; /* #E9D8BE */
+  --vy-plum-400: 160 112 140;      /* #A0708C */
+  --vy-plum-700: 92 52 75;         /* #5C344B */
+  --vy-sage-400: 150 170 138;      /* #96AA8A */
+  --vy-sage-700: 74 96 64;         /* #4A6040 */
+  --vy-amber-400: 214 170 96;      /* #D6AA60 */
+  --vy-amber-700: 124 88 28;       /* #7C581C */
+  --vy-garnet-400: 226 120 120;    /* #E27878 */
+  --vy-garnet-700: 156 46 56;      /* #9C2E38 */
+  --vy-mist-400: 146 170 196;      /* #92AAC4 */
+  --vy-mist-700: 60 86 116;        /* #3C5674 */
+
+  /* ── Typography ─────────────────────────────────────────────────────────── */
+  --vy-font-display: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;           /* caps only */
+  --vy-font-editorial: 'Cormorant Garamond', 'Cormorant', Garamond, Georgia, serif;
+  --vy-font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Major-third scale (1.25) on 16px; display sizes are fluid. */
+  --vy-text-2xs: 0.6875rem;  /* 11 – overlines only */
+  --vy-text-xs:  0.75rem;    /* 12 */
+  --vy-text-sm:  0.875rem;   /* 14 */
+  --vy-text-md:  1rem;       /* 16 – body */
+  --vy-text-lg:  1.125rem;   /* 18 */
+  --vy-text-xl:  1.25rem;    /* 20 */
+  --vy-text-2xl: 1.5625rem;  /* 25 */
+  --vy-text-3xl: clamp(1.75rem, 1.4rem + 1.4vw, 1.953rem);   /* 28→31 */
+  --vy-text-4xl: clamp(2rem, 1.5rem + 2.2vw, 2.441rem);      /* 32→39 */
+  --vy-text-5xl: clamp(2.375rem, 1.6rem + 3.4vw, 3.052rem);  /* 38→49 */
+  --vy-text-6xl: clamp(2.75rem, 1.6rem + 5vw, 3.815rem);     /* 44→61 */
+  --vy-text-7xl: clamp(3.25rem, 1.5rem + 7.5vw, 4.768rem);   /* 52→76 */
+
+  --vy-weight-regular: 400;
+  --vy-weight-medium: 500;
+  --vy-weight-semibold: 600;
+
+  --vy-leading-tight: 1.1;
+  --vy-leading-snug: 1.3;
+  --vy-leading-normal: 1.55;
+  --vy-leading-relaxed: 1.7;
+
+  --vy-tracking-tight: -0.01em;
+  --vy-tracking-normal: 0;
+  --vy-tracking-wide: 0.04em;
+  --vy-tracking-caps: 0.16em;      /* Cinzel headings */
+  --vy-tracking-overline: 0.24em;  /* eyebrows, labels */
+
+  --vy-measure: 65ch;              /* max line length for reading */
+
+  /* ── Spacing (4px base) ─────────────────────────────────────────────────── */
+  --vy-space-0: 0;
+  --vy-space-px: 1px;
+  --vy-space-1: 0.25rem;  /* 4 */
+  --vy-space-2: 0.5rem;   /* 8 */
+  --vy-space-3: 0.75rem;  /* 12 */
+  --vy-space-4: 1rem;     /* 16 */
+  --vy-space-5: 1.25rem;  /* 20 */
+  --vy-space-6: 1.5rem;   /* 24 */
+  --vy-space-8: 2rem;     /* 32 */
+  --vy-space-10: 2.5rem;  /* 40 */
+  --vy-space-12: 3rem;    /* 48 */
+  --vy-space-16: 4rem;    /* 64 */
+  --vy-space-20: 5rem;    /* 80 */
+  --vy-space-24: 6rem;    /* 96 */
+  --vy-space-32: 8rem;    /* 128 */
+  --vy-section-y: clamp(4rem, 2rem + 8vw, 8rem); /* vertical rhythm between page sections */
+  --vy-gutter: clamp(1.25rem, 0.5rem + 3vw, 3rem);
+  --vy-control-sm: 2.25rem;  /* 36 */
+  --vy-control-md: 2.75rem;  /* 44 — minimum touch target */
+  --vy-control-lg: 3.25rem;  /* 52 */
+  --vy-container: 72rem;   /* 1152 */
+  --vy-container-narrow: 44rem;
+
+  /* ── Radii — restrained; sharp reads as tailored ───────────────────────── */
+  --vy-radius-none: 0;
+  --vy-radius-xs: 2px;     /* buttons, inputs */
+  --vy-radius-sm: 4px;
+  --vy-radius-md: 8px;     /* cards */
+  --vy-radius-lg: 16px;    /* modals, sheets */
+  --vy-radius-pill: 999px; /* badges, chips, avatars */
+
+  /* ── Borders ───────────────────────────────────────────────────────────── */
+  --vy-border-hairline: 1px;
+  --vy-border-strong: 1.5px;
+  --vy-border-focus: 2px;
+
+  /* ── Motion ─────────────────────────────────────────────────────────────── */
+  --vy-duration-instant: 0ms;
+  --vy-duration-fast: 120ms;     /* hovers, presses */
+  --vy-duration-base: 200ms;     /* most state changes */
+  --vy-duration-slow: 320ms;     /* modals, panels */
+  --vy-duration-reveal: 640ms;   /* editorial reveals, Style DNA unveil */
+  --vy-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --vy-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --vy-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --vy-ease-silk: cubic-bezier(0.22, 0.61, 0.36, 1); /* long, luxurious settles */
+
+  /* ── Elevation (z-index) ───────────────────────────────────────────────── */
+  --vy-z-base: 0;
+  --vy-z-sticky: 100;
+  --vy-z-overlay: 400;
+  --vy-z-modal: 500;
+  --vy-z-toast: 600;
+
+  /* ── Layout breakpoints (reference — CSS vars can't drive @media) ───────── */
+  /* sm 640px · md 768px · lg 1024px · xl 1280px */
+}
+
+/* ==========================================================================
+   Theme · Obsidian (default)
+   ========================================================================== */
+:root,
+[data-theme='obsidian'] {
+  color-scheme: dark;
+
+  --vy-bg: var(--vy-obsidian-950);
+  --vy-surface: var(--vy-obsidian-900);
+  --vy-surface-raised: var(--vy-obsidian-800);
+  --vy-surface-sunken: 7 6 8;
+  --vy-overlay: 5 4 6;                      /* scrim, used with alpha */
+
+  --vy-text: var(--vy-porcelain-100);
+  --vy-text-muted: var(--vy-porcelain-400);
+  --vy-text-subtle: 132 122 128;            /* #847A80 — decorative/disabled only */
+  --vy-text-inverse: var(--vy-obsidian-950);
+
+  --vy-border: var(--vy-obsidian-700);
+  --vy-border-emphasis: var(--vy-obsidian-500);
+
+  --vy-accent: var(--vy-rose-gold-500);         /* fills */
+  --vy-accent-hover: var(--vy-rose-gold-400);
+  --vy-accent-pressed: var(--vy-rose-gold-600);
+  --vy-accent-contrast: var(--vy-obsidian-950); /* text on accent fills */
+  --vy-accent-text: var(--vy-rose-gold-400);    /* accent used as text/icons */
+  --vy-accent-soft: var(--vy-rose-gold-500);    /* used at low alpha for tints */
+
+  --vy-focus: var(--vy-rose-gold-300);
+
+  --vy-success: var(--vy-sage-400);
+  --vy-warning: var(--vy-amber-400);
+  --vy-danger: var(--vy-garnet-400);
+  --vy-info: var(--vy-mist-400);
+  --vy-estimate: var(--vy-champagne-300);
+
+  --vy-gilded: linear-gradient(135deg, rgb(var(--vy-rose-gold-300)), rgb(var(--vy-rose-gold-500)) 45%, rgb(var(--vy-rose-gold-700)));
+
+  --vy-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --vy-shadow-md: 0 8px 24px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(var(--vy-border) / 0.6);
+  --vy-shadow-lg: 0 24px 64px -16px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(var(--vy-border) / 0.8);
+  --vy-shadow-glow: 0 0 0 1px rgb(var(--vy-rose-gold-500) / 0.35), 0 12px 40px -12px rgb(var(--vy-rose-gold-500) / 0.35);
+}
+
+/* ==========================================================================
+   Theme · Porcelain (light) — long-form reading: reports, settings
+   ========================================================================== */
+[data-theme='porcelain'] {
+  color-scheme: light;
+
+  --vy-bg: var(--vy-porcelain-100);
+  --vy-surface: var(--vy-porcelain-50);
+  --vy-surface-raised: 255 255 255;
+  --vy-surface-sunken: var(--vy-porcelain-200);
+  --vy-overlay: var(--vy-obsidian-950);
+
+  --vy-text: var(--vy-obsidian-950);
+  --vy-text-muted: 94 86 90;                /* #5E565A */
+  --vy-text-subtle: 140 130 128;
+  --vy-text-inverse: var(--vy-porcelain-50);
+
+  --vy-border: var(--vy-porcelain-300);
+  --vy-border-emphasis: 138 128 120;       /* #8A8078 — ≥3:1 on porcelain (input boundaries) */
+
+  --vy-accent: var(--vy-obsidian-950);          /* primary fill is obsidian on light */
+  --vy-accent-hover: var(--vy-obsidian-800);
+  --vy-accent-pressed: var(--vy-obsidian-700);
+  --vy-accent-contrast: var(--vy-porcelain-100);
+  --vy-accent-text: var(--vy-rose-gold-700);
+  --vy-accent-soft: var(--vy-rose-gold-500);
+
+  --vy-focus: var(--vy-rose-gold-700);
+
+  --vy-success: var(--vy-sage-700);
+  --vy-warning: var(--vy-amber-700);
+  --vy-danger: var(--vy-garnet-700);
+  --vy-info: var(--vy-mist-700);
+  --vy-estimate: var(--vy-rose-gold-800);
+
+  --vy-shadow-sm: 0 1px 2px rgb(var(--vy-obsidian-950) / 0.06);
+  --vy-shadow-md: 0 10px 30px -12px rgb(var(--vy-obsidian-950) / 0.18), 0 0 0 1px rgb(var(--vy-border) / 0.7);
+  --vy-shadow-lg: 0 28px 70px -20px rgb(var(--vy-obsidian-950) / 0.28), 0 0 0 1px rgb(var(--vy-border) / 0.8);
+  --vy-shadow-glow: 0 0 0 1px rgb(var(--vy-rose-gold-600) / 0.4), 0 14px 40px -14px rgb(var(--vy-rose-gold-600) / 0.35);
+}
+
+/* ==========================================================================
+   Reduced motion — collapse durations; components also drop transforms.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --vy-duration-fast: 0ms;
+    --vy-duration-base: 0ms;
+    --vy-duration-slow: 0ms;
+    --vy-duration-reveal: 0ms;
+  }
+}
+/* Explicit opt-in for previews/tests (showcase toggle). */
+[data-motion='reduced'] {
+  --vy-duration-fast: 0ms;
+  --vy-duration-base: 0ms;
+  --vy-duration-slow: 0ms;
+  --vy-duration-reveal: 0ms;
+}

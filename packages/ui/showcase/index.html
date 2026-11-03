@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en" data-theme="obsidian">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VYSEL Design System</title>
+  <meta name="description" content="VYSEL brand and design system — tokens, components and patterns." />
+  <link rel="icon" href="../assets/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" />
+  <link rel="stylesheet" href="../tokens/tokens.css" />
+  <link rel="stylesheet" href="../styles/components.css" />
+  <link rel="stylesheet" href="showcase.css" />
+</head>
+<body class="vy-root">
+  <a class="vy-skip-link" href="#main">Skip to content</a>
+
+  <div class="sc-shell">
+    <aside class="sc-side" aria-label="Sections">
+      <a href="#top" class="sc-side__brand" data-brand="wordmark" aria-label="VYSEL design system, top"></a>
+      <p class="vy-overline">Design System · v0.1</p>
+      <ul class="sc-side__nav">
+        <li><a href="#brand">Brand</a></li>
+        <li><a href="#colour">Colour</a></li>
+        <li><a href="#type">Typography</a></li>
+        <li><a href="#foundations">Space, shape &amp; motion</a></li>
+        <li><a href="#buttons">Buttons</a></li>
+        <li><a href="#cards">Cards</a></li>
+        <li><a href="#forms">Forms</a></li>
+        <li><a href="#badges">Badges</a></li>
+        <li><a href="#overlays">Modal</a></li>
+        <li><a href="#navigation">Navigation</a></li>
+        <li><a href="#feedback">Loading &amp; states</a></li>
+        <li><a href="#playground">Playground</a></li>
+        <li><a href="#patterns">Pattern: Style DNA</a></li>
+      </ul>
+    </aside>
+
+    <div class="sc-main">
+      <div class="sc-toolbar" role="region" aria-label="Preview settings">
+        <div class="sc-toolbar__group" role="radiogroup" aria-label="Theme">
+          <span class="vy-label" aria-hidden="true">Theme</span>
+          <label class="vy-chip"><input type="radio" name="theme" value="obsidian" checked /><span>Obsidian</span></label>
+          <label class="vy-chip"><input type="radio" name="theme" value="porcelain" /><span>Porcelain</span></label>
+        </div>
+        <div class="sc-toolbar__group" role="radiogroup" aria-label="Motion">
+          <span class="vy-label" aria-hidden="true">Motion</span>
+          <label class="vy-chip"><input type="radio" name="motion" value="full" checked /><span>Full</span></label>
+          <label class="vy-chip"><input type="radio" name="motion" value="reduced" /><span>Reduced</span></label>
+        </div>
+      </div>
+
+      <main id="main" class="vy-container">
+        <!-- ─────────────── Hero ─────────────── -->
+        <header class="sc-hero" id="top">
+          <p class="vy-overline">Brand &amp; Design System</p>
+          <div class="sc-hero__mark vy-reveal" data-brand="wordmark" style="margin-block: var(--vy-space-8)"></div>
+          <p class="vy-lead">Quiet luxury for personal style. Obsidian ground, rose-gold light, and typography that whispers rather than shouts.</p>
+        </header>
+
+        <!-- ─────────────── Brand ─────────────── -->
+        <section class="sc-section" id="brand" aria-labelledby="brand-h">
+          <div class="sc-section__head">
+            <p class="vy-overline">01 · Identity</p>
+            <h2 class="vy-h2" id="brand-h">Wordmark &amp; monogram</h2>
+            <p class="vy-body">Custom high-contrast capitals: thick stems, hairline diagonals, no serifs, generous tracking. The <em class="vy-emphasis">facet</em> in the monogram stands for insight revealed from a single selfie.</p>
+          </div>
+          <div class="sc-grid" style="--sc-min: 20rem">
+            <figure class="sc-tile" style="margin:0"><div class="sc-ground sc-ground--obsidian"><img src="../assets/brand/vysel-wordmark-porcelain.svg" alt="VYSEL wordmark in porcelain" width="260" /></div><figcaption class="sc-tile__label">vysel-wordmark-porcelain.svg · primary on dark</figcaption></figure>
+            <figure class="sc-tile" style="margin:0"><div class="sc-ground sc-ground--porcelain"><img src="../assets/brand/vysel-wordmark.svg" alt="VYSEL wordmark in obsidian" width="260" /></div><figcaption class="sc-tile__label">vysel-wordmark.svg · primary on light</figcaption></figure>
+            <figure class="sc-tile" style="margin:0"><div class="sc-ground sc-ground--obsidian"><img src="../assets/brand/vysel-wordmark-rose-gold.svg" alt="VYSEL wordmark in rose-gold gradient" width="260" /></div><figcaption class="sc-tile__label">vysel-wordmark-rose-gold.svg · hero moments only</figcaption></figure>
+            <figure class="sc-tile" style="margin:0"><div class="sc-ground sc-ground--porcelain"><img src="../assets/brand/vysel-monogram.svg" alt="VYSEL V monogram with rose-gold facet" width="96" /></div><figcaption class="sc-tile__label">vysel-monogram.svg</figcaption></figure>
+            <figure class="sc-tile" style="margin:0"><div class="sc-ground sc-ground--porcelain"><div class="sc-row" style="align-items:end"><img src="../assets/brand/vysel-app-icon.svg" alt="VYSEL app icon" width="96" /><img src="../assets/brand/favicon.svg" alt="" width="48" /><img src="../assets/brand/favicon.svg" alt="" width="32" /><img src="../assets/brand/favicon.svg" alt="" width="16" /></div></div><figcaption class="sc-tile__label">vysel-app-icon.svg · favicon.svg (heavier hairline for 16px)</figcaption></figure>
+          </div>
+        </section>
+
+        <!-- ─────────────── Colour ─────────────── -->
+        <section class="sc-section" id="colour" aria-labelledby="colour-h">
+          <div class="sc-section__head">
+            <p class="vy-overline">02 · Colour</p>
+            <h2 class="vy-h2" id="colour-h">Obsidian, porcelain &amp; rose gold</h2>
+            <p class="vy-body">One accent, used sparingly. About 90% obsidian or porcelain, 8% neutral steps, 2% rose gold. Values below are read live from <code>tokens.css</code>.</p>
+          </div>
+          <div id="palette"></div>
+          <h3 class="sc-sub">Semantic pairs · live contrast (<span data-theme-name>Obsidian</span>)</h3>
+          <div class="sc-table-wrap"><table class="sc-table" id="contrast"><thead><tr><th>Pair</th><th>Sample</th><th>Ratio</th><th>WCAG</th></tr></thead><tbody></tbody></table></div>
+        </section>
+
+        <!-- ─────────────── Typography ─────────────── -->
+        <section class="sc-section" id="type" aria-labelledby="type-h">
+          <div class="sc-section__head">
+            <p class="vy-overline">03 · Typography</p>
+            <h2 class="vy-h2" id="type-h">Three voices</h2>
+            <p class="vy-body"><strong>Cinzel</strong> announces (caps only, short). <strong>Cormorant Garamond</strong> narrates (editorial headings, the "why it suits you"). <strong>DM Sans</strong> works (all UI, body, data).</p>
+          </div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-display · Cinzel</span><p class="vy-display">Style DNA</p></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-h1 · Cinzel</span><h3 class="vy-h1">Your palette</h3></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-h2 · Cormorant</span><h3 class="vy-h2">Meet your personal Style DNA</h3></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-h3 · Cormorant</span><h3 class="vy-h3">Soft layers, long waves</h3></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-h4 · Cormorant</span><h3 class="vy-h4">Why it suits you</h3></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-lead · Cormorant italic</span><p class="vy-lead">Balanced proportions suit most cuts, and soft, muted shades suit a neutral undertone.</p></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-body · DM Sans 16</span><p class="vy-body">Upload one selfie and set your budget. VYSEL estimates your face shape and undertone, then ranks hair, eyewear and makeup picks, each with a short reason.</p></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-overline · DM Sans 11</span><p class="vy-overline">Face shape · estimate</p></div>
+          <div class="sc-type"><span class="sc-tile__label">.vy-caption · DM Sans 14</span><p class="vy-caption">Estimates from a single photo. Lighting and camera can shift results.</p></div>
+        </section>
+
+        <!-- ─────────────── Foundations ─────────────── -->
+        <section class="sc-section" id="foundations" aria-labelledby="found-h">
+          <div class="sc-section__head">
+            <p class="vy-overline">04 · Foundations</p>
+            <h2 class="vy-h2" id="found-h">Space, shape &amp; motion</h2>
+          </div>
+          <h3 class="sc-sub">Spacing · 4px base</h3>
+          <div class="sc-stack" id="spacing"></div>
+          <h3 class="sc-sub">Radii · restrained, tailored</h3>
+          <div class="sc-row">
+            <div class="sc-stack" style="align-items:center"><div class="sc-radius" style="border-radius:var(--vy-radius-xs)"></div><code class="sc-tile__label">xs 2 · controls</code></div>
+            <div class="sc-stack" style="align-items:center"><div class="sc-radius" style="border-radius:var(--vy-radius-sm)"></div><code class="sc-tile__label">sm 4</code></div>
+            <div class="sc-stack" style="align-items:center"><div class="sc-radius" style="border-radius:var(--vy-radius-md)"></div><code class="sc-tile__label">md 8 · cards</code></div>
+            <div class="sc-stack" style="align-items:center"><div class="sc-radius" style="border-radius:var(--vy-radius-lg)"></div><code class="sc-tile__label">lg 16 · modals</code></div>
+            <div class="sc-stack" style="align-items:center"><div class="sc-radius" style="border-radius:var(--vy-radius-pill)"></div><code class="sc-tile__label">pill · badges</code></div>
+          </div>
+          <h3 class="sc-sub">Elevation</h3>
+          <div class="sc-grid" style="--sc-min: 12rem">
+            <div class="sc-shadow" style="box-shadow:var(--vy-shadow-sm)">--vy-shadow-sm</div>
+            <div class="sc-shadow" style="box-shadow:var(--vy-shadow-md)">--vy-shadow-md</div>
+            <div class="sc-shadow" style="box-shadow:var(--vy-shadow-lg)">--vy-shadow-lg</div>
+            <div class="sc-shadow" style="box-shadow:var(--vy-shadow-glow)">--vy-shadow-glow</div>
+          </div>
+          <h3 class="sc-sub">Motion · click to play</h3>
+          <div class="sc-stack" id="motion"></div>
+          <div class="sc-row" style="margin-top:var(--vy-space-4)"><button class="vy-btn vy-btn--secondary vy-btn--sm" type="button" id="motion-play"><span class="vy-btn__label">Play curves</span></button><span class="vy-caption">Set Motion → Reduced to see the reduced-motion behaviour.</span></div>
+        </section>
+
+        <!-- ─────────────── Buttons ─────────────── -->
+        <section class="sc-section" id="buttons" aria-labelledby="btn-h">
+          <div class="sc-section__head">
+            <p class="vy-overline">05 · Components</p>
+            <h2 class="vy-h2" id="btn-h">Buttons</h2>
+            <p class="vy-body">One primary action per view. Labels are uppercase, tracked and short (one to three words).</p>
+          </div>
+          <div class="sc-stack">
+            <div class="sc-row">
+              <button class="vy-btn vy-btn--primary" type="button"><span class="vy-btn__label">Start scan</span></button>
+              <button class="vy-btn vy-btn--secondary" type="button"><span class="vy-btn__label">View report</span></button>
+              <button class="vy-btn vy-btn--ghost" type="button"><span class="vy-btn__label">Skip</span></button>
+              <button class="vy-btn vy-btn--link" type="button"><span class="vy-btn__label">Learn how it works</span></button>
+            </div>
+            <div class="sc-row">
+              <button class="vy-btn vy-btn--primary vy-btn--sm" type="button"><span class="vy-btn__label">Small</span></button>
+              <button class="vy-btn vy-btn--primary" type="button"><span class="vy-btn__label">Medium</span></button>
+              <button class="vy-btn vy-btn--primary vy-btn--lg" type="button"><span class="vy-btn__label">Large</span></button>
+              <button class="vy-btn vy-btn--secondary vy-btn--icon" type="button" aria-label="Open camera" data-icon="camera"></button>
+            </div>
+            <div class="sc-row">
+              <button class="vy-btn vy-btn--primary" type="button" id="demo-loading"><span class="vy-btn__label">Click to load</span></button>
+              <button class="vy-btn vy-btn--primary" type="button" aria-busy="true" aria-disabled="true"><span class="vy-btn__label">Analysing</span><span class="vy-spinner" aria-hidden="true"></span></button>
+              <button class="vy-btn vy-btn--primary" type="button" disabled><span class="vy-btn__label">Disabled</span></button>
+              <button class="vy-btn vy-btn--secondary" type="button" disabled><span class="vy-btn__label">Disabled</span></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─────────────── Cards ─────────────── -->
+        <section class="sc-section" id="cards" aria-labelledby="card-h">
+          <div class="sc-section__head"><h2 class="vy-h2" id="card-h">Cards</h2><p class="vy-body">Gilded is reserved for Style DNA moments; never more than one per view.</p></div>
+          <div class="sc-grid">
+            <div class="vy-card"><p class="vy-overline">Default</p><h3 class="vy-card__title">Hair</h3><p class="vy-card__body">Soft layers and long waves complement balanced proportions.</p></div>
+            <div class="vy-card vy-card--raised"><p class="vy-overline">Raised</p><h3 class="vy-card__title">Eyewear</h3><p class="vy-card__body">Slim rectangle frames add gentle definition.</p></div>
+            <div class="vy-card vy-card--gilded"><p class="vy-overline">Gilded</p><h3 class="vy-card__title">Your Style DNA</h3><p class="vy-card__body">Oval · Neutral · Rose, Sage, Navy.</p><div class="vy-card__footer"><span class="vy-badge vy-badge--estimate">Estimate · 72%</span></div></div>
+            <a class="vy-card vy-card--interactive" href="#cards"><p class="vy-overline">Interactive</p><h3 class="vy-card__title">3 Nov · Everyday</h3><p class="vy-card__body">Open this past analysis.</p><div class="vy-card__footer"><span class="vy-caption">View</span></div></a>
+          </div>
+        </section>
+
+        <!-- ─────────────── Forms ─────────────── -->
+        <section class="sc-section" id="forms" aria-labelledby="form-h">
+          <div class="sc-section__head"><h2 class="vy-h2" id="form-h">Inputs, selects &amp; chips</h2><p class="vy-body">Labels always visible (never placeholder-only). Errors say what happened and how to fix it.</p></div>
+          <div class="sc-grid" style="--sc-min: 18rem">
+            <div class="vy-field"><label class="vy-label" for="f-name">Display name</label><input class="vy-input" id="f-name" placeholder="Tanya" aria-describedby="f-name-hint" /><p class="vy-hint" id="f-name-hint">Shown on your Style DNA report.</p></div>
+            <div class="vy-field"><label class="vy-label" for="f-email">Email</label><input class="vy-input" id="f-email" type="email" value="tanya@" aria-invalid="true" aria-describedby="f-email-err" /><p class="vy-field__error" id="f-email-err" data-icon="alert">Enter a full email address, like name@example.com.</p></div>
+            <div class="vy-field"><label class="vy-label" for="f-budget">Budget</label><div class="vy-select"><select class="vy-select__control" id="f-budget"><option>Low</option><option selected>Mid</option><option>High</option></select></div></div>
+            <div class="vy-field"><label class="vy-label" for="f-dis">Disabled <span class="vy-label__optional">(optional)</span></label><input class="vy-input" id="f-dis" disabled value="Not editable" /></div>
+            <div class="vy-field"><label class="vy-label" for="f-notes">Anything to avoid? <span class="vy-label__optional">(optional)</span></label><textarea class="vy-textarea" id="f-notes" placeholder="E.g. no heavy fringes"></textarea></div>
+            <fieldset class="vy-field"><legend class="vy-label">Style</legend><div class="vy-chips"><label class="vy-chip"><input type="radio" name="style" checked /><span>Everyday</span></label><label class="vy-chip"><input type="radio" name="style" /><span>Minimal</span></label><label class="vy-chip"><input type="radio" name="style" /><span>Classic</span></label><label class="vy-chip"><input type="radio" name="style" /><span>Bold</span></label></div></fieldset>
+          </div>
+        </section>
+
+        <!-- ─────────────── Badges ─────────────── -->
+        <section class="sc-section" id="badges" aria-labelledby="badge-h">
+          <div class="sc-section__head"><h2 class="vy-h2" id="badge-h">Badges</h2><p class="vy-body">The dashed <strong>estimate</strong> badge is mandatory beside every AI-inferred value. It is VYSEL's honesty signature.</p></div>
+          <div class="sc-row">
+            <span class="vy-badge">Neutral</span><span class="vy-badge vy-badge--accent">New</span><span class="vy-badge vy-badge--success"><span class="vy-badge__dot" aria-hidden="true"></span>Complete</span><span class="vy-badge vy-badge--warning">Low light</span><span class="vy-badge vy-badge--danger">Failed</span><span class="vy-badge vy-badge--info">Beta</span><span class="vy-badge vy-badge--estimate">Estimate · 64%</span>
+          </div>
+        </section>
+
+        <!-- ─────────────── Modal ─────────────── -->
+        <section class="sc-section" id="overlays" aria-labelledby="modal-h">
+          <div class="sc-section__head"><h2 class="vy-h2" id="modal-h">Modal</h2><p class="vy-body">Native <code>&lt;dialog&gt;</code>: focus trap, Esc and inert background built in. Becomes a bottom sheet under 640px.</p></div>
+          <button class="vy-btn vy-btn--secondary" type="button" data-open-modal="consent-modal"><span class="vy-btn__label">Open consent modal</span></button>
+          <dialog class="vy-modal" id="consent-modal" aria-labelledby="consent-title" aria-describedby="consent-desc">
+            <div class="vy-modal__header"><h2 class="vy-modal__title" id="consent-title">Before we look</h2><button class="vy-btn vy-btn--ghost vy-btn--sm vy-btn--icon" type="button" aria-label="Close" data-close-modal data-icon="close"></button></div>
+            <div class="vy-modal__body"><p id="consent-desc">We analyse your selfie to estimate face shape and skin tone. By default the photo is deleted right after analysis.</p><div class="vy-alert"><span class="vy-alert__icon" aria-hidden="true" data-icon="info"></span><div><p class="vy-alert__title">Your choice</p><p class="vy-alert__body">You can keep photos for future try-on features in Settings.</p></div></div></div>
+            <div class="vy-modal__footer"><button class="vy-btn vy-btn--ghost" type="button" data-close-modal><span class="vy-btn__label">Not now</span></button><button class="vy-btn vy-btn--primary" type="button" data-close-modal><span class="vy-btn__label">I agree</span></button></div>
+          </dialog>
+        </section>
+
+        <!-- ─────────────── Navigation ─────────────── -->
+        <section class="sc-section" id="navigation" aria-labelledby="nav-h">
+          <div class="sc-section__head"><h2 class="vy-h2" id="nav-h">Navigation</h2><p class="vy-body">Sticky, translucent bar with the wordmark. It collapses to a disclosure menu below 768px. The tabs use arrow keys plus Home/End.</p></div>
+          <div class="vy-card" style="padding:0; overflow:hidden">
+            <header class="vy-nav" data-open="false" style="position:relative">
+              <nav class="vy-container vy-nav__inner" aria-label="Demo">
+                <a href="#navigation" class="vy-nav__brand" aria-label="VYSEL home" data-brand="wordmark"></a>
+                <button class="vy-btn vy-btn--ghost vy-btn--icon vy-nav__toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="demo-menu" data-icon="menu"></button>
+                <ul class="vy-nav__links" id="demo-menu">
+                  <li><a class="vy-nav__link" href="#navigation" aria-current="page">Scan</a></li>
+                  <li><a class="vy-nav__link" href="#navigation">My Style DNA</a></li>
+                  <li><a class="vy-nav__link" href="#navigation">History</a></li>
+                </ul>
+                <div class="vy-nav__actions"><button class="vy-btn vy-btn--primary vy-btn--sm" type="button"><span class="vy-btn__label">New scan</span></button></div>
+              </nav>
+            </header>
+            <div style="padding: var(--vy-space-6)">
+              <div class="vy-tabs" data-tabs>
+                <div class="vy-tabs__list" role="tablist" aria-label="Report sections">
+                  <button class="vy-tabs__tab" role="tab" type="button" id="t-1" aria-selected="true" aria-controls="p-1" tabindex="0">Overview</button>
+                  <button class="vy-tabs__tab" role="tab" type="button" id="t-2" aria-selected="false" aria-controls="p-2" tabindex="-1">Palette</button>
+                  <button class="vy-tabs__tab" role="tab" type="button" id="t-3" aria-selected="false" aria-controls="p-3" tabindex="-1">Picks</button>
+                </div>
+                <div class="vy-tabs__panel" role="tabpanel" id="p-1" aria-labelledby="t-1" tabindex="0"><p class="vy-body">Overview of your estimated features.</p></div>
+                <div class="vy-tabs__panel" role="tabpanel" id="p-2" aria-labelledby="t-2" tabindex="0" hidden><p class="vy-body">Rose, sage, navy, plum and cream.</p></div>
+                <div class="vy-tabs__panel" role="tabpanel" id="p-3" aria-labelledby="t-3" tabindex="0" hidden><p class="vy-body">Ranked hair, eyewear and makeup picks.</p></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─────────────── Feedback ─────────────── -->
+        <section class="sc-section" id="feedback" aria-labelledby="fb-h">
+          <div class="sc-section__head"><h2 class="vy-h2" id="fb-h">Loading, empty, success &amp; error</h2><p class="vy-body">Steps mirror the API's analysis stages, so the wait feels like progress rather than a spinner.</p></div>
+          <div class="sc-grid" style="--sc-min: 20rem">
+            <div class="sc-tile">
+              <span class="sc-tile__label">Steps · .vy-steps (simulated)</span>
+              <ol class="vy-steps" id="demo-steps" aria-label="Analysis progress"></ol>
+              <div class="vy-progress" role="progressbar" aria-label="Analysis" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="demo-progress"><div class="vy-progress__bar"></div></div>
+              <p class="vy-visually-hidden" aria-live="polite" id="demo-steps-live"></p>
+              <button class="vy-btn vy-btn--secondary vy-btn--sm" type="button" id="demo-steps-run"><span class="vy-btn__label">Replay</span></button>
+            </div>
+            <div class="sc-tile">
+              <span class="sc-tile__label">Spinner · skeleton</span>
+              <div class="sc-row"><span class="vy-spinner" role="status" aria-label="Loading"></span><span class="vy-spinner vy-spinner--lg" role="status" aria-label="Loading"></span></div>
+              <div class="sc-row" style="flex-wrap:nowrap"><span class="vy-skeleton vy-skeleton--circle" style="width:3rem"></span><div class="sc-stack" style="flex:1; gap: var(--vy-space-2)"><span class="vy-skeleton" style="width:70%"></span><span class="vy-skeleton" style="width:45%"></span></div></div>
+              <span class="vy-skeleton" style="height:6rem"></span>
+            </div>
+          </div>
+          <div class="sc-grid" style="--sc-min: 18rem; margin-top: var(--vy-space-6)">
+            <div class="sc-tile"><section class="vy-state vy-state--empty" role="status"><span class="vy-state__icon" aria-hidden="true" data-icon="facet"></span><h3 class="vy-state__title">No Style DNA yet</h3><p class="vy-state__desc">One selfie in soft daylight is all it takes.</p><div class="vy-state__actions"><button class="vy-btn vy-btn--primary vy-btn--sm" type="button"><span class="vy-btn__label">Start scan</span></button></div></section></div>
+            <div class="sc-tile"><section class="vy-state vy-state--success" role="status"><span class="vy-state__icon" aria-hidden="true" data-icon="check"></span><h3 class="vy-state__title">Your Style DNA is ready</h3><p class="vy-state__desc">Your photo has been deleted.</p><div class="vy-state__actions"><button class="vy-btn vy-btn--primary vy-btn--sm" type="button"><span class="vy-btn__label">Reveal</span></button></div></section></div>
+            <div class="sc-tile"><section class="vy-state vy-state--error" role="alert"><span class="vy-state__icon" aria-hidden="true" data-icon="alert"></span><h3 class="vy-state__title">A little too dark</h3><p class="vy-state__desc">Face a window or soft light and retake. Nothing was saved.</p><div class="vy-state__actions"><button class="vy-btn vy-btn--primary vy-btn--sm" type="button"><span class="vy-btn__label">Retake</span></button><button class="vy-btn vy-btn--ghost vy-btn--sm" type="button"><span class="vy-btn__label">Tips</span></button></div></section></div>
+          </div>
+          <div class="sc-stack" style="margin-top: var(--vy-space-6)">
+            <div class="vy-alert" role="status"><span class="vy-alert__icon" aria-hidden="true" data-icon="info"></span><div><p class="vy-alert__title">Estimates, not verdicts</p><p class="vy-alert__body">Results come from one photo. Try another in different light to compare.</p></div></div>
+            <div class="vy-alert vy-alert--success" role="status"><span class="vy-alert__icon" aria-hidden="true" data-icon="check"></span><div><p class="vy-alert__title">Preferences saved</p></div></div>
+            <div class="vy-alert vy-alert--warning" role="alert"><span class="vy-alert__icon" aria-hidden="true" data-icon="alert"></span><div><p class="vy-alert__title">Low light detected</p><p class="vy-alert__body">Results may be less accurate.</p></div></div>
+            <div class="vy-alert vy-alert--danger" role="alert"><span class="vy-alert__icon" aria-hidden="true" data-icon="alert"></span><div><p class="vy-alert__title">Upload failed</p><p class="vy-alert__body">Check your connection and try again.</p></div></div>
+          </div>
+        </section>
+
+        <!-- ─────────────── Playground ─────────────── -->
+        <section class="sc-section" id="playground" aria-labelledby="play-h">
+          <div class="sc-section__head"><p class="vy-overline">06 · Playground</p><h2 class="vy-h2" id="play-h">Compose &amp; preview</h2><p class="vy-body">Pick a component, variant and state, then preview it at real breakpoints in either theme. Copy the JSX.</p></div>
+          <div class="sc-play">
+            <form class="sc-play__controls" id="play-form" aria-label="Playground controls">
+              <div class="vy-field"><label class="vy-label" for="pg-component">Component</label><div class="vy-select"><select class="vy-select__control" id="pg-component" name="component"></select></div></div>
+              <div class="vy-field"><label class="vy-label" for="pg-variant">Variant</label><div class="vy-select"><select class="vy-select__control" id="pg-variant" name="variant"></select></div></div>
+              <div class="vy-field"><label class="vy-label" for="pg-state">State</label><div class="vy-select"><select class="vy-select__control" id="pg-state" name="state"></select></div></div>
+              <div class="vy-field"><label class="vy-label" for="pg-label">Label</label><input class="vy-input" id="pg-label" name="label" maxlength="40" /></div>
+              <fieldset class="vy-field"><legend class="vy-label">Theme</legend><div class="vy-chips"><label class="vy-chip"><input type="radio" name="pgTheme" value="obsidian" checked /><span>Obsidian</span></label><label class="vy-chip"><input type="radio" name="pgTheme" value="porcelain" /><span>Porcelain</span></label></div></fieldset>
+              <fieldset class="vy-field"><legend class="vy-label">Viewport</legend><div class="vy-chips"><label class="vy-chip"><input type="radio" name="pgWidth" value="375" /><span>375</span></label><label class="vy-chip"><input type="radio" name="pgWidth" value="768" /><span>768</span></label><label class="vy-chip"><input type="radio" name="pgWidth" value="100%" checked /><span>Fluid</span></label></div></fieldset>
+            </form>
+            <div class="sc-play__stage">
+              <div class="sc-play__frame-wrap"><iframe class="sc-play__frame" id="pg-frame" src="preview.html" title="Component preview"></iframe></div>
+              <pre class="sc-code"><code id="pg-code"></code><button class="vy-btn vy-btn--secondary vy-btn--sm sc-code__copy" type="button" id="pg-copy"><span class="vy-btn__label">Copy</span></button></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─────────────── Pattern ─────────────── -->
+        <section class="sc-section" id="patterns" aria-labelledby="dna-h">
+          <div class="sc-section__head"><p class="vy-overline">07 · Pattern preview</p><h2 class="vy-h2" id="dna-h">Style DNA card</h2><p class="vy-body">A reference composition for the report page, built only from system parts. Sample data comes from the OpenAPI example.</p></div>
+          <article class="vy-card vy-card--gilded sc-dna">
+            <div>
+              <p class="vy-overline">Your Style DNA · 3 Nov 2026</p>
+              <h3 class="vy-h2" style="margin: var(--vy-space-3) 0 var(--vy-space-6)">Soft, balanced, <span class="vy-emphasis">quietly warm</span></h3>
+              <div class="sc-dna__feature"><div class="sc-dna__feature-head"><span class="vy-overline">Face shape</span><span class="vy-badge vy-badge--estimate">Estimate</span></div><span class="sc-dna__value">Oval</span><div class="vy-confidence"><span>Confidence</span><span class="vy-confidence__track" role="meter" aria-label="Face shape confidence" aria-valuemin="0" aria-valuemax="100" aria-valuenow="72"><span class="vy-confidence__fill" style="--vy-value: .72"></span></span><span class="vy-numeric">72%</span></div></div>
+              <div class="sc-dna__feature"><div class="sc-dna__feature-head"><span class="vy-overline">Undertone</span><span class="vy-badge vy-badge--estimate">Estimate</span></div><span class="sc-dna__value">Neutral</span><div class="vy-confidence"><span>Confidence</span><span class="vy-confidence__track" role="meter" aria-label="Undertone confidence" aria-valuemin="0" aria-valuemax="100" aria-valuenow="64"><span class="vy-confidence__fill" style="--vy-value: .64"></span></span><span class="vy-numeric">64%</span></div></div>
+              <p class="vy-overline" style="margin-top: var(--vy-space-6)">Palette</p>
+              <div class="sc-row" style="margin-top: var(--vy-space-3)">
+                <span class="vy-swatch"><span class="vy-swatch__chip" style="--vy-swatch-color:#C27C88"></span><span>Rose</span></span>
+                <span class="vy-swatch"><span class="vy-swatch__chip" style="--vy-swatch-color:#9CAF88"></span><span>Sage</span></span>
+                <span class="vy-swatch"><span class="vy-swatch__chip" style="--vy-swatch-color:#1F2A44"></span><span>Navy</span></span>
+                <span class="vy-swatch"><span class="vy-swatch__chip" style="--vy-swatch-color:#6E3B5C"></span><span>Plum</span></span>
+                <span class="vy-swatch"><span class="vy-swatch__chip" style="--vy-swatch-color:#F3E9D2"></span><span>Cream</span></span>
+              </div>
+            </div>
+            <div>
+              <p class="vy-overline">Top picks</p>
+              <div class="sc-pick"><div class="sc-pick__head"><strong>Soft layers</strong><span class="vy-badge">Hair</span></div><span class="vy-caption">Balanced proportions carry layered volume without widening the face.</span></div>
+              <div class="sc-pick"><div class="sc-pick__head"><strong>Slim rectangle</strong><span class="vy-badge">Eyewear</span></div><span class="vy-caption">Gentle angles add definition to soft, balanced features.</span></div>
+              <div class="sc-pick"><div class="sc-pick__head"><strong>Rose lip</strong><span class="vy-badge">Makeup</span></div><span class="vy-caption">Muted pink sits well on a neutral undertone.</span></div>
+              <p class="vy-overline" style="margin-top: var(--vy-space-8)">Why it suits you</p>
+              <p class="vy-lead" style="margin-top: var(--vy-space-3); font-size: var(--vy-text-xl)">Balanced proportions suit most cuts, and soft, muted shades suit a neutral undertone.</p>
+              <div class="sc-row" style="margin-top: var(--vy-space-6)"><button class="vy-btn vy-btn--primary" type="button"><span class="vy-btn__label">See all picks</span></button><button class="vy-btn vy-btn--link" type="button"><span class="vy-btn__label">Adjust preferences</span></button></div>
+            </div>
+          </article>
+          <p class="vy-caption" style="margin-top: var(--vy-space-4)">Palette swatches are API data (StyleDNA.palette), so their hex values are not tokens.</p>
+        </section>
+
+        <footer style="padding-block: var(--vy-space-16); text-align:center"><p class="vy-caption">VYSEL Design System · Team Terrificers · Tokens: <code>packages/ui/tokens/tokens.css</code></p></footer>
+      </main>
+    </div>
+  </div>
+
+  <script src="brand-paths.js"></script>
+  <script src="shared.js"></script>
+  <script src="showcase.js"></script>
+</body>
+</html>
