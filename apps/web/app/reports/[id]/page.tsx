@@ -8,6 +8,7 @@ import { AppShell } from '@/components/app/AppShell';
 import { RequireAuth } from '@/components/auth/guards';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ReportView } from '@/components/reports/ReportView';
+import { ProductMatches } from '@/components/reports/ProductMatches';
 import { ApiError } from '@/lib/api';
 import { downloadReportPdf } from '@/lib/reportPdf';
 import type { Report } from '@/lib/reports';
@@ -127,6 +128,7 @@ function ReportPageContent() {
       {report && (
         <>
           <ReportView data={report.report_data} feedback={feedback} onFeedback={saveFeedback} />
+          <ProductMatches reportId={id} />
           <section className="report-page__sharing vy-card screen-only" aria-labelledby="report-share-title">
             <div>
               <p className="vy-overline">Privacy controls</p>

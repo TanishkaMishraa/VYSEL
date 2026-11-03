@@ -214,7 +214,7 @@ function ProfileView() {
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         title="Delete your account?"
-        description="This permanently deletes your profile, preferences and sessions. It can’t be undone."
+        description="This permanently deletes your profile, reports, feedback, saved looks, scans, and private selfie files. If a private file cannot be removed, deletion stops so you can retry. This can’t be undone."
         dismissible={false}
         footer={
           <>
@@ -226,8 +226,19 @@ function ProfileView() {
               loading={deleting}
               onClick={async () => {
                 setDeleting(true);
-                await deleteAccount();
-                router.replace('/');
+                try {
+                  await deleteAccount();
+                  router.replace('/');
+                } catch (cause) {
+                  setNotice({
+                    tone: 'danger',
+                    text: cause instanceof ApiError
+                      ? cause.message
+                      : 'Account data could not all be removed. Your account is still active; please try again.',
+                  });
+                } finally {
+                  setDeleting(false);
+                }
               }}
             >
               Delete permanently

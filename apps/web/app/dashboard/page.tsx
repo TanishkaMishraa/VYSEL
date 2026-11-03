@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Alert, Badge, StateMessage, buttonClassName } from '@vysel/ui';
 import { AppShell } from '@/components/app/AppShell';
@@ -9,11 +9,16 @@ import { RequireAuth } from '@/components/auth/guards';
 import { BUDGETS, OCCASIONS, STYLE_GOALS, STYLES, labelOf } from '@/lib/preferences';
 import { ApiError } from '@/lib/api';
 import type { ReportListItem } from '@/lib/reports';
+import { ReportComparison } from '@/components/reports/ReportComparison';
+import type { Report } from '@/lib/reports';
 
 function Dashboard() {
   const { user, apiRequest } = useAuth();
   const [reports, setReports] = useState<ReportListItem[] | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [selectedReports, setSelectedReports] = useState<string[]>([]);
+  const [comparison, setComparison] = useState<[ReportListItem, ReportListItem] | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
   const preferences = user!.preferences;
   const goals = preferences.style_goals.map((goal) => labelOf(STYLE_GOALS, goal)!);
   const occasions = preferences.occasions.map((occasion) => labelOf(OCCASIONS, occasion)!);
@@ -23,6 +28,28 @@ function Dashboard() {
       .then(setReports)
       .catch((cause: unknown) => setReportError(cause instanceof ApiError ? cause.message : 'Could not load your reports.'));
   }, [apiRequest]);
+
+  const loadReport = useCallback((id: string) => apiRequest<Report>(`/reports/${encodeURIComponent(id)}`), [apiRequest]);
+
+  function toggleReport(id: string) {
+    setComparison(null);
+    setComparisonError(null);
+    setSelectedReports((selected) => selected.includes(id)
+      ? selected.filter((item) => item !== id)
+      : selected.length < 2 ? [...selected, id] : selected);
+  }
+
+  function compareSelectedReports() {
+    if (!reports || selectedReports.length !== 2) return;
+    const [leftId, rightId] = selectedReports;
+    const left = reports.find((report) => report.id === leftId);
+    const right = reports.find((report) => report.id === rightId);
+    if (!left || !right) {
+      setComparisonError('One of the selected reports is no longer available. Reload your history and try again.');
+      return;
+    }
+    setComparison([left, right]);
+  }
 
   return (
     <div className="dash">
@@ -74,22 +101,41 @@ function Dashboard() {
         {reports === null ? (
           <p className="vy-caption">Loading your saved reports…</p>
         ) : reports.length > 0 ? (
-          <div className="dash__reports">
-            {reports.map((report) => (
-              <article className="dash__report vy-card" key={report.id}>
-                <div>
-                  <p className="vy-overline">{report.season} season</p>
-                  <p className="vy-caption">{new Date(report.created_at).toLocaleDateString()} · {report.recommendation_count} recommendations</p>
-                </div>
-                <div className="dash__report-actions">
-                  {report.share_enabled && <Badge tone="accent">Shared</Badge>}
-                  <Link href={`/reports/${encodeURIComponent(report.id)}`} className={buttonClassName({ variant: 'link' })}>
-                    <span className="vy-btn__label">View report</span>
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
+          <>
+            <div className="dash__history-actions">
+              <p className="vy-caption">Select two reports to compare their estimates, palettes, and recommendations.</p>
+              <button type="button" className={buttonClassName({ variant: 'secondary' })} disabled={selectedReports.length !== 2} onClick={compareSelectedReports}>
+                Compare selected ({selectedReports.length}/2)
+              </button>
+            </div>
+            {comparisonError && <Alert tone="danger">{comparisonError}</Alert>}
+            <div className="dash__reports">
+              {reports.map((report) => (
+                <article className="dash__report vy-card" key={report.id}>
+                  <div>
+                    <p className="vy-overline">{report.season} season</p>
+                    <p className="vy-caption">{new Date(report.created_at).toLocaleDateString()} · {report.recommendation_count} recommendations</p>
+                  </div>
+                  <div className="dash__report-actions">
+                    <label className="dash__compare-select">
+                      <input
+                        type="checkbox"
+                        checked={selectedReports.includes(report.id)}
+                        disabled={!selectedReports.includes(report.id) && selectedReports.length >= 2}
+                        onChange={() => toggleReport(report.id)}
+                      />
+                      Compare
+                    </label>
+                    {report.share_enabled && <Badge tone="accent">Shared</Badge>}
+                    <Link href={`/reports/${encodeURIComponent(report.id)}`} className={buttonClassName({ variant: 'link' })}>
+                      <span className="vy-btn__label">View report</span>
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {comparison && <ReportComparison left={comparison[0]} right={comparison[1]} loadReport={loadReport} />}
+          </>
         ) : (
           <StateMessage
             kind="empty"

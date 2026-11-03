@@ -243,17 +243,26 @@ paths:
       operationId: deleteMe
       summary: Delete account and all associated data
       description: |
-        Revokes all sessions immediately, then erases the account, analyses, results
-        and any stored images. Object-storage deletion completes asynchronously
-        (within 24 h) but data is inaccessible from the moment this returns.
+        Deletes the account's profile, preferences, sessions, reports, feedback, saved
+        looks, scans, image metadata and private selfie files. If a private file cannot
+        be removed, returns 503 and keeps the account active so deletion can be retried.
       responses:
         '204':
-          description: Account scheduled for erasure.
+          description: Account and associated data erased.
           headers:
             Set-Cookie:
               description: Expires the `vysel_refresh` cookie.
               schema: { type: string }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '503':
+          description: A private image could not be removed; the account remains active so deletion can be retried.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                status: 503
+                code: DATA_DELETION_INCOMPLETE
+                detail: Private images could not all be removed. Your account is still active; please retry.
 
   # ─────────────────────────────── Images ───────────────────────────────
   /images:
@@ -651,6 +660,31 @@ paths:
         '204': { description: Deleted. Any share link is revoked. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/{report_id}/products:
+    parameters:
+      - { name: report_id, in: path, required: true, schema: { type: string } }
+      - name: budget
+        in: query
+        required: false
+        description: Omit to use the saved profile budget. Use `all` to disable the price ceiling.
+        schema: { type: string, enum: [low, mid, high, all] }
+    get:
+      tags: [Products]
+      operationId: getReportProductMatches
+      summary: Find curated product listings that match report recommendations
+      description: |
+        Returns only products whose type, style attributes, or shade colour match a
+        recommendation. Reference prices are in INR and are not live retailer inventory.
+      responses:
+        '200':
+          description: Product matches grouped by their Style DNA recommendation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductMatches' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
   /reports/{report_id}/share:
     parameters:
@@ -1775,6 +1809,41 @@ components:
         season: { type: string, enum: [spring, summer, autumn, winter] }
         recommendation_count: { type: integer, minimum: 0 }
         share_enabled: { type: boolean }
+    ProductMatches:
+      type: object
+      required: [currency, budget_filter, price_disclaimer, matches]
+      properties:
+        currency: { type: string, const: INR }
+        budget_filter: { type: string, enum: [low, mid, high, all] }
+        price_disclaimer: { type: string }
+        matches:
+          type: array
+          items: { $ref: '#/components/schemas/ProductRecommendationMatch' }
+    ProductRecommendationMatch:
+      type: object
+      required: [recommendation_id, recommendation_label, category, products]
+      properties:
+        recommendation_id: { type: string }
+        recommendation_label: { type: string }
+        category: { type: string, enum: [hair, eyewear, makeup, outfit_color, outfit_cut] }
+        products:
+          type: array
+          items: { $ref: '#/components/schemas/ProductMatch' }
+    ProductMatch:
+      type: object
+      required: [id, name, brand, retailer, listing_url, price_inr, budget, match_score, match_reason]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        retailer: { type: string }
+        listing_url: { type: string, format: uri }
+        price_inr: { type: integer, minimum: 1, description: Curated reference price, not live. }
+        budget: { type: string, enum: [low, mid, high] }
+        shade_name: { type: [string, 'null'] }
+        color_hex: { oneOf: [{ $ref: '#/components/schemas/HexColor' }, { type: 'null' }] }
+        match_score: { type: number, minimum: 0, maximum: 1 }
+        match_reason: { type: string }
     ShareLink:
       type: object
       required: [share_url]

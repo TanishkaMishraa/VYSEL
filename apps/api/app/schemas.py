@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 # ── Shared vocabularies (keep in sync with apps/web/lib/preferences.ts) ──
 Budget = Literal["low", "mid", "high"]
+ProductBudgetFilter = Literal["low", "mid", "high", "all"]
 StylePreference = Literal["everyday", "minimal", "classic", "bold", "formal"]
 Category = Literal["hair", "eyewear", "makeup"]
 StyleGoal = Literal["hair", "eyewear", "makeup", "palette", "everyday_refresh", "special_occasion"]
@@ -210,6 +211,34 @@ class ReportListItem(BaseModel):
     season: Season
     recommendation_count: int
     share_enabled: bool
+
+
+class ProductMatch(BaseModel):
+    id: str
+    name: str
+    brand: str
+    retailer: str
+    listing_url: str
+    price_inr: int = Field(gt=0)
+    budget: Budget
+    shade_name: str | None = None
+    color_hex: str | None = None
+    match_score: float = Field(ge=0, le=1)
+    match_reason: str
+
+
+class ProductRecommendationMatch(BaseModel):
+    recommendation_id: str
+    recommendation_label: str
+    category: RecommendationCategory
+    products: list[ProductMatch]
+
+
+class ProductMatchesResponse(BaseModel):
+    currency: Literal["INR"]
+    budget_filter: ProductBudgetFilter
+    price_disclaimer: str
+    matches: list[ProductRecommendationMatch]
 
 
 class ShareLinkOut(BaseModel):

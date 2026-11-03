@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Wordmark } from '@vysel/ui';
 import { FaceMap } from '@/components/landing/FaceMap';
+import './auth.css';
 
 /** Split editorial layout for sign-in flows: brand panel (≥1024px) + form column. */
 export function AuthShell({ eyebrow, title, lead, children, footer }: { eyebrow: string; title: ReactNode; lead?: ReactNode; children: ReactNode; footer?: ReactNode }) {

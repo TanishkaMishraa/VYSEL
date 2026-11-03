@@ -46,3 +46,33 @@ export interface ReportListItem {
   recommendation_count: number;
   share_enabled: boolean;
 }
+
+export type ProductBudgetFilter = 'low' | 'mid' | 'high' | 'all';
+
+export interface MatchedProduct {
+  id: string;
+  name: string;
+  brand: string;
+  retailer: string;
+  listing_url: string;
+  price_inr: number;
+  budget: 'low' | 'mid' | 'high';
+  shade_name: string | null;
+  color_hex: string | null;
+  match_score: number;
+  match_reason: string;
+}
+
+export interface ProductRecommendationMatch {
+  recommendation_id: string;
+  recommendation_label: string;
+  category: RecommendationCategory;
+  products: MatchedProduct[];
+}
+
+export interface ProductMatches {
+  currency: 'INR';
+  budget_filter: ProductBudgetFilter;
+  price_disclaimer: string;
+  matches: ProductRecommendationMatch[];
+}

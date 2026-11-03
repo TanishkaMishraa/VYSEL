@@ -1,16 +1,33 @@
 """The signed-in user's profile and onboarding preferences."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Response
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app import schemas
+from app.config import get_settings
 from app.db import get_db, utcnow
 from app.deps import current_user
-from app.models import ImageUpload, User, UserPreferences
+from app.errors import ApiError
+from app.models import (
+    FaceScan,
+    ImageUpload,
+    OAuthAccount,
+    PasswordResetToken,
+    RecommendationFeedback,
+    RecommendationReport,
+    RefreshToken,
+    SavedTryOnLook,
+    User,
+    UserPreferences,
+)
 from app.services import auth as sessions
-from app.services.image_storage import delete_image
+from app.services.image_storage import delete_image as remove_image
 
 router = APIRouter(prefix="/me", tags=["Profile"])
+log = logging.getLogger(__name__)
 
 
 @router.get("", response_model=schemas.Profile)
@@ -45,12 +62,31 @@ def update_me(body: schemas.ProfileUpdate, user: User = Depends(current_user), d
 
 @router.delete("", status_code=204)
 def delete_me(response: Response, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Erase the account; sessions, tokens, links and preferences cascade."""
-    from app.config import get_settings
+    """Erase account-owned database rows and private image files."""
+    images = db.scalars(select(ImageUpload).where(ImageUpload.user_id == user.id)).all()
+    storage_dir = get_settings().selfie_storage_dir
+    for image in images:
+        try:
+            remove_image(storage_dir, image.storage_key)
+        except (OSError, ValueError) as exc:
+            log.exception("Could not remove private image for account deletion user=%s image=%s", user.id, image.id)
+            raise ApiError(
+                503,
+                "DATA_DELETION_INCOMPLETE",
+                "Private images could not all be removed. Your account is still active; please retry.",
+            ) from exc
 
-    for image in db.query(ImageUpload).filter_by(user_id=user.id).all():
-        delete_image(get_settings().selfie_storage_dir, image.storage_key)
-    db.delete(user)
+    user_id = user.id
+    db.execute(delete(RecommendationFeedback).where(RecommendationFeedback.user_id == user_id))
+    db.execute(delete(RecommendationReport).where(RecommendationReport.user_id == user_id))
+    db.execute(delete(FaceScan).where(FaceScan.user_id == user_id))
+    db.execute(delete(ImageUpload).where(ImageUpload.user_id == user_id))
+    db.execute(delete(SavedTryOnLook).where(SavedTryOnLook.user_id == user_id))
+    db.execute(delete(UserPreferences).where(UserPreferences.user_id == user_id))
+    db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+    db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user_id))
+    db.execute(delete(OAuthAccount).where(OAuthAccount.user_id == user_id))
+    db.execute(delete(User).where(User.id == user_id))
     db.commit()
     sessions.clear_refresh_cookie(response)
     response.status_code = 204

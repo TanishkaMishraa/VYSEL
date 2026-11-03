@@ -76,3 +76,30 @@ heuristics, not empirically validated accuracy or effectiveness measurements.
 
 The response carries the score weights and a disclaimer. Keep the estimates,
 reasons, and subjective/optional nature visible in any UI that presents the picks.
+
+## Product listings
+
+`GET /v1/reports/{report_id}/products` matches saved report recommendations to a
+small local India-focused product catalogue. Makeup matches require the same product
+type and a nearby shade colour; hair tools and eyewear require an explicit style tag;
+clothing matches use the suggested neckline or a nearby catalogue colour. A missing
+match stays empty rather than being replaced with an unrelated item.
+
+The catalogue includes retailer search links and indicative INR reference prices.
+Prices, variants, stock and availability are not fetched live and may change; confirm
+them with the retailer. The `budget` query filter uses the saved profile budget by
+default (`low` up to ₹500, `mid` up to ₹1,500, `high` without a ceiling); `all`
+removes the ceiling. This is a curated discovery catalogue, not an affiliate or
+retailer partnership.
+
+## Report history and deletion
+
+Saved Style DNA reports are the durable history; `/v1/reports` lists them newest
+first. Face scan rows include biometric landmarks and remain subject to the existing
+short retention window rather than being exposed as durable history. The dashboard
+loads two account-owned reports for side-by-side comparison.
+
+`DELETE /v1/me` removes the account's preferences, auth tokens, reports, feedback,
+saved looks, face scans, image metadata and private selfie files. If a private file
+cannot be deleted, the API reports an error and leaves the account active so the
+user can retry.
