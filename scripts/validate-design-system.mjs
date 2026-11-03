@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ui = join(root, 'packages/ui');
-const read = (p) => readFileSync(join(ui, p), 'utf8');
+const read = (p) => readFileSync(join(ui, p), 'utf8').replace(/\r\n/g, '\n');
 
 const tokens = read('tokens/tokens.css');
 const components = read('styles/components.css');

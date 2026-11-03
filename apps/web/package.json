@@ -7,6 +7,7 @@
     "dev": "next dev",
     "prebuild": "npm run tryon:assets",
     "build": "next build",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "tryon:assets": "node scripts/fetch-mediapipe-assets.mjs"

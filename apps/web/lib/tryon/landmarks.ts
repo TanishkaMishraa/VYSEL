@@ -56,10 +56,13 @@ export function roll(pts: Point[]): number {
 export class LandmarkSmoother {
   private prev: Point[] | null = null;
 
-  constructor(
-    private readonly still = 0.35,
-    private readonly moving = 0.85,
-  ) {}
+  private readonly still: number;
+  private readonly moving: number;
+
+  constructor(still = 0.35, moving = 0.85) {
+    this.still = still;
+    this.moving = moving;
+  }
 
   smooth(next: Point[], scale: number): Point[] {
     const prev = this.prev;

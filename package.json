@@ -11,11 +11,13 @@
     "build": "npm run build -w @vysel/web",
     "start": "npm run start -w @vysel/web",
     "typecheck": "npm run typecheck -w @vysel/web && npm run typecheck -w @vysel/ui",
+    "test": "node --experimental-strip-types --test apps/web/tests/*.test.mjs",
+    "test:all": "node scripts/test-all.mjs",
     "brand:build": "node scripts/build-brand-assets.mjs",
     "ds:validate": "node scripts/validate-design-system.mjs"
   },
   "engines": {
-    "node": ">=20 <23",
+    "node": ">=20",
     "npm": ">=10"
   },
   "devDependencies": {

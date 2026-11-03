@@ -31,7 +31,7 @@ function Ok($msg) { Write-Host "  + $msg" -ForegroundColor Green }
 Step 'Preflight'
 foreach ($tool in 'node', 'npm') { if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { Fail "$tool not found. Install Node.js 20 or 22 (see docs/local-setup.md)." } }
 $nodeMajor = [int]((node -v) -replace '^v(\d+).*', '$1')
-if ($nodeMajor -lt 20 -or $nodeMajor -gt 22) { Fail "Node $(node -v) is unsupported; use Node 20 or 22." }
+if ($nodeMajor -lt 20) { Fail "Node $(node -v) is unsupported; use Node 20 or higher." }
 Ok "Node $(node -v)"
 
 if (-not (Test-Path $Py)) {
