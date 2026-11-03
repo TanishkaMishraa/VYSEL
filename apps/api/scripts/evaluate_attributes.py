@@ -28,6 +28,8 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from statistics import mean
+from time import perf_counter
 
 import numpy as np
 
@@ -86,11 +88,12 @@ def analyze_rows(rows: list[Row], settings: Settings) -> list[dict]:
     outcomes = []
     with FaceAnalyzer(settings) as analyzer:
         for row in rows:
+            started = perf_counter()
             rgb, corrected = load_oriented_rgb(row.path.read_bytes())
             try:
                 attributes = analyze_appearance(rgb, analyzer.analyze(rgb, orientation_corrected=corrected), settings)["attributes"]
             except FaceAnalysisError as exc:
-                outcomes.append({"status": exc.code})
+                outcomes.append({"status": exc.code, "processing_time_ms": (perf_counter() - started) * 1000})
                 continue
             outcome: dict = {"status": "ok"}
             for name in ATTRIBUTES:
@@ -98,6 +101,7 @@ def analyze_rows(rows: list[Row], settings: Settings) -> list[dict]:
                 outcome[name] = (result["value"], result["confidence"]) if result["status"] == "ok" else None
             shape = attributes["face_shape"]
             outcome["features"] = shape.get("features")
+            outcome["processing_time_ms"] = (perf_counter() - started) * 1000
             outcomes.append(outcome)
     return outcomes
 
@@ -105,6 +109,15 @@ def analyze_rows(rows: list[Row], settings: Settings) -> list[dict]:
 def summarize(pairs: list[tuple[Row, dict]]) -> dict:
     summary: dict = {"images": len(pairs), "people": len({row.person_id for row, _ in pairs})}
     summary["face_analyzed_rate"] = rate(sum(o["status"] == "ok" for _, o in pairs), len(pairs))
+    timings = sorted(float(o["processing_time_ms"]) for _, o in pairs if o.get("processing_time_ms") is not None)
+    if timings:
+        summary["processing_time_ms"] = {
+            "n": len(timings),
+            "mean": round(mean(timings), 2),
+            "median": round(float(np.percentile(timings, 50)), 2),
+            "p95": round(float(np.percentile(timings, 95)), 2),
+            "images_per_second": round(1000 / mean(timings), 2) if mean(timings) else None,
+        }
     for name, vocabulary in ATTRIBUTES.items():
         labelled = [(row, o) for row, o in pairs if name in row.labels]
         predicted = [(row.labels[name], o[name][0], o[name][1]) for row, o in labelled if o.get(name)]

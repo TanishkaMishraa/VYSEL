@@ -23,6 +23,7 @@ Team Terrificers · PSIT Kanpur.
 | Path | What |
 |---|---|
 | `apps/web` | Next.js 14 landing page, dashboard, scan-to-report flow, Style DNA reports, virtual try-on and account settings ([docs/landing-page.md](docs/landing-page.md), [docs/virtual-try-on.md](docs/virtual-try-on.md)) |
+| `apps/api/PIPELINE_EVALUATION.md` | Celery selfie pipeline, scan-status polling, and consented evaluation protocol |
 | `apps/api` | FastAPI auth/profile, selfie upload ([IMAGE_UPLOAD.md](apps/api/IMAGE_UPLOAD.md)), face detection and landmarks ([FACE_ANALYSIS.md](apps/api/FACE_ANALYSIS.md)), skin analysis ([SKIN_ANALYSIS.md](apps/api/SKIN_ANALYSIS.md)), face shape and eye/hair colour ([FACIAL_ATTRIBUTES.md](apps/api/FACIAL_ATTRIBUTES.md)), recommendations/reports, SQLAlchemy/Alembic and Celery worker |
 | `packages/ui` | Design system: tokens, components, brand assets, showcase |
 | `docs/api/openapi.yaml` | API contract |

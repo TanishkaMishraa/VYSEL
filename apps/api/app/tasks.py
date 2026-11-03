@@ -6,9 +6,16 @@ import time
 from app import email
 from app.db import SessionLocal
 from app.models import BackgroundJob, JobStatus
+from app.services.scan_pipeline import process_face_scan
 from app.worker import celery_app
 
 log = logging.getLogger(__name__)
+
+
+@celery_app.task(name="vysel.analyze_face_scan", bind=True)
+def analyze_face_scan(self, scan_id: str) -> dict:
+    """Run face detection, landmarks, skin and facial attributes in the worker."""
+    return process_face_scan(scan_id)
 
 
 @celery_app.task(name="vysel.hello_world", bind=True)

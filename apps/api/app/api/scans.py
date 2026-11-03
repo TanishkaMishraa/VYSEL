@@ -13,16 +13,13 @@ from sqlalchemy.orm import Session
 
 from app import schemas
 from app.api.images import CheckOut
-from app.config import get_settings
 from app.db import get_db, utcnow
 from app.deps import current_user
 from app.errors import ApiError
 from app.models import FaceScan, ImageUpload, User
 from app.ratelimit import enforce
-from app.services.appearance import analyze_appearance
-from app.services.face_analysis import MODEL_NAME, FaceAnalysisError, FaceModelUnavailable, get_face_analyzer, load_oriented_rgb
-from app.services.image_storage import image_path
-from app.services.image_validation import ImageValidationError, validate_image
+from app.services.face_analysis import MODEL_NAME
+from app.tasks import analyze_face_scan
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/scans", tags=["Scans"])
@@ -233,7 +230,7 @@ class Attributes(BaseModel):
 class ScanOut(BaseModel):
     id: str
     image_id: str
-    status: Literal["succeeded", "failed"]
+    status: Literal["queued", "running", "succeeded", "failed"]
     face_count: int
     detection: Detection | None = None
     image: ImageInfo | None = None
@@ -252,6 +249,7 @@ class ScanOut(BaseModel):
     model: ScanModel
     created_at: str
     expires_at: str
+    processing_time_ms: float | None = Field(default=None, description="Worker processing duration; present for completed scans.")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -288,97 +286,60 @@ def _owned_image(db: Session, user: User, image_id: str) -> ImageUpload:
 
 @router.post(
     "",
-    status_code=201,
+    status_code=202,
     response_model=ScanOut,
     response_model_exclude_none=True,
     operation_id="createFaceScan",
-    summary="Detect one face and extract landmarks and facial regions",
+    summary="Queue face detection, landmark extraction and appearance analysis",
     responses={
         401: {"description": "Authentication is required."},
         404: {"description": "Image not found (or owned by someone else)."},
         410: {"description": "`UPLOAD_EXPIRED`: the image passed its retention window."},
-        422: {
-            "description": "`NO_FACE_DETECTED`, `MULTIPLE_FACES_DETECTED`, `FACE_LANDMARKS_NOT_FOUND` (body includes the failed "
-            "`scan`), or a Phase 4.1 validation code such as `IMAGE_QUALITY_FAILED`."
-        },
+        422: {"description": "Malformed request or invalid image data."},
         429: {"description": "Too many scans."},
-        503: {"description": "`FACE_ANALYSIS_UNAVAILABLE`: the face model is not installed."},
+        503: {"description": "The background job queue is unavailable."},
     },
 )
 def create_scan(
     body: CreateScanRequest, response: Response, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
-    """Runs synchronously (about 25 ms on a laptop CPU once the model is loaded). Only images that pass Phase 4.1
-    validation are analyzed: the stored bytes are re-validated with the current rules first."""
+    """Queue the full analysis pipeline. Poll the returned scan URL until status is terminal."""
     enforce("face-scan", user.id, limit=30, window_seconds=600)
-    cfg = get_settings()
     image = _owned_image(db, user, body.image_id)
-    try:
-        data = image_path(cfg.selfie_storage_dir, image.storage_key).read_bytes()
-    except (OSError, ValueError):
-        log.warning("Stored file missing for image=%s", image.id)
-        raise ApiError(410, "UPLOAD_EXPIRED", "This image is no longer available. Upload a new selfie.") from None
-
-    extension = "jpg" if image.content_type == "image/jpeg" else "png"
-    try:
-        validation = validate_image(data, f"selfie.{extension}", image.content_type, cfg)
-    except ImageValidationError as exc:
-        raise ApiError(422, exc.code, str(exc)) from None
-    if not validation.valid:
-        raise ApiError(
-            422,
-            "IMAGE_QUALITY_FAILED",
-            "Image quality requirements were not met.",
-            validation_errors=list(validation.errors),
-            validation=validation.json_checks(),
-        )
-
-    try:
-        analyzer = get_face_analyzer()
-    except FaceModelUnavailable as exc:
-        log.error("Face analysis unavailable: %s", exc)
-        raise ApiError(503, "FACE_ANALYSIS_UNAVAILABLE", "Face analysis is temporarily unavailable.", retry_after=30) from None
-
-    result: dict[str, Any] = {"validation": validation.json_checks()}
-    failure: FaceAnalysisError | None = None
-    try:
-        rgb, orientation_corrected = load_oriented_rgb(data)
-        analysis = analyzer.analyze(rgb, orientation_corrected=orientation_corrected)
-        result |= analysis.as_json()
-        face_count, confidence = analysis.face_count, analysis.detection["confidence"]
-        # Skin (4.3), face shape and attributes (4.4); each part can be "unavailable" on its own.
-        result |= analyze_appearance(rgb, analysis, cfg)
-    except FaceAnalysisError as exc:
-        failure = exc
-        result |= {"warnings": exc.warnings, "error": {"code": exc.code, "message": exc.message}}
-        face_count, confidence = exc.face_count, None
-    result.pop("face_count", None)
-
     scan = FaceScan(
         user_id=user.id,
         image_id=image.id,
-        status="failed" if failure else "succeeded",
-        error_code=failure.code if failure else None,
-        face_count=face_count,
-        detection_confidence=confidence,
+        status="queued",
+        face_count=0,
         model_version=MODEL_NAME,
-        result=result,
+        result={"validation": image.validation_results},
         expires_at=image.expires_at,
     )
     db.add(scan)
     db.commit()
-    log.info("Face scan %s image=%s status=%s code=%s faces=%d", scan.id, image.id, scan.status, scan.error_code, face_count)
-
+    try:
+        analyze_face_scan.delay(scan.id)
+    except Exception:
+        log.exception("Could not enqueue face scan id=%s", scan.id)
+        db.delete(scan)
+        db.commit()
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "Analysis could not be queued. Please try again shortly.") from None
+    db.refresh(scan)
     payload = ScanOut(**scan_json(scan)).model_dump(exclude_none=True)
-    if failure:
-        raise ApiError(422, failure.code, failure.message, scan=payload)
     response.headers["Location"] = f"/v1/scans/{scan.id}"
+    if scan.status in {"queued", "running"}:
+        response.headers["Retry-After"] = "1"
+    response.status_code = 202
     return payload
 
 
 @router.get("/{scan_id}", response_model=ScanOut, response_model_exclude_none=True, operation_id="getFaceScan")
-def get_scan(scan_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+def get_scan(
+    scan_id: str, response: Response, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict[str, Any]:
     scan = db.scalar(select(FaceScan).where(FaceScan.id == scan_id, FaceScan.user_id == user.id))
     if scan is None or _aware(scan.expires_at) <= utcnow():
         raise ApiError(404, "NOT_FOUND", "Scan not found.")
+    if scan.status in {"queued", "running"}:
+        response.headers["Retry-After"] = "1"
     return scan_json(scan)

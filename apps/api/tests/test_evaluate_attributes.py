@@ -51,6 +51,9 @@ def test_report(dataset, face_analyzer):
     result = MODULE.report(rows, MODULE.analyze_rows(rows, face_analyzer.settings))
     overall = result["overall"]
     assert overall["images"] == 3 and overall["face_analyzed_rate"] == pytest.approx(0.6667, abs=1e-3)
+    assert overall["processing_time_ms"]["n"] == 3
+    assert overall["processing_time_ms"]["median"] >= 0
+    assert overall["processing_time_ms"]["p95"] >= overall["processing_time_ms"]["median"]
     shape = overall["face_shape"]
     assert shape["n"] == 2 and shape["available_rate"] == 1.0 and 0 <= shape["accuracy"] <= 1
     assert shape["majority_baseline_accuracy"] == 0.5

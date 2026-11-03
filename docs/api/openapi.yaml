@@ -355,13 +355,12 @@ paths:
     post:
       tags: [Scans]
       operationId: createFaceScan
-      summary: Detect one face and extract landmarks and facial regions
+      summary: Queue face detection, landmarks and appearance analysis
       description: |
-        Synchronous. The stored image is re-validated with the current upload quality rules,
-        then MediaPipe checks for exactly one face and returns its 478 landmarks, facial
-        regions (cheeks, forehead, chin, jawline, face oval) and key points. Rejections are
-        stored as `failed` scans and returned inside the problem body as `scan`.
-        Details: apps/api/FACE_ANALYSIS.md.
+        Asynchronous. The API stores a queued scan and dispatches the full pipeline to Celery.
+        Poll the Location URL until status is succeeded or failed. The worker re-validates
+        the stored image, then runs face detection, landmarks, skin, face shape, eye colour
+        and hair colour. Details: apps/api/PIPELINE_EVALUATION.md.
       requestBody:
         required: true
         content:
@@ -373,8 +372,8 @@ paths:
               properties:
                 image_id: { type: string, maxLength: 40 }
       responses:
-        '201':
-          description: One face found.
+        '202':
+          description: Analysis accepted and queued.
           headers:
             Location:
               description: URL of the scan.
@@ -389,25 +388,9 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
-        '422':
-          description: |
-            `NO_FACE_DETECTED`, `MULTIPLE_FACES_DETECTED` or `FACE_LANDMARKS_NOT_FOUND` (the body
-            adds `scan`, a FaceScan with status `failed`), or an upload validation code such as
-            `IMAGE_QUALITY_FAILED`.
-          content:
-            application/problem+json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/Problem' }
-                  - type: object
-                    properties:
-                      scan: { $ref: '#/components/schemas/FaceScan' }
+        '422': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
-        '503':
-          description: '`FACE_ANALYSIS_UNAVAILABLE`: the face model is not installed on the server.'
-          content:
-            application/problem+json:
-              schema: { $ref: '#/components/schemas/Problem' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /scans/{scan_id}:
     parameters:
@@ -419,9 +402,14 @@ paths:
       tags: [Scans]
       operationId: getFaceScan
       summary: Get a face scan
+      description: Poll the scan. Pending states include `Retry-After`; failed scans include a safe actionable error.
       responses:
         '200':
-          description: The scan (succeeded or failed).
+          description: Current scan state and, when complete, its analysis result.
+          headers:
+            Retry-After:
+              description: Present while the status is queued or running.
+              schema: { type: integer, minimum: 1 }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FaceScan' }
@@ -1208,7 +1196,7 @@ components:
       properties:
         id: { type: string, pattern: '^scn_[0-9a-f]{32}$' }
         image_id: { type: string }
-        status: { type: string, enum: [succeeded, failed] }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
         face_count: { type: integer, minimum: 0 }
         detection:
           type: object
@@ -1285,7 +1273,7 @@ components:
         error:
           type: object
           properties:
-            code: { type: string, enum: [NO_FACE_DETECTED, MULTIPLE_FACES_DETECTED, FACE_LANDMARKS_NOT_FOUND] }
+            code: { type: string, description: Stable safe error code, for example NO_FACE_DETECTED or ANALYSIS_FAILED. }
             message: { type: string }
         validation: { type: object, description: Upload quality checks (resolution, blur, brightness, exposure). }
         model:
@@ -1294,6 +1282,7 @@ components:
             name: { type: string, examples: [mediapipe-face-landmarker/float16/1] }
         created_at: { $ref: '#/components/schemas/Timestamp' }
         expires_at: { $ref: '#/components/schemas/Timestamp' }
+        processing_time_ms: { type: number, minimum: 0, description: Worker processing duration, present after completion. }
 
     AttributeUnavailable:
       type: object

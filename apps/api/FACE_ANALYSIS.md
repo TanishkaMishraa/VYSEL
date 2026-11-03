@@ -24,26 +24,27 @@ in `apps/api/models/`, which is git-ignored. No model is trained or fine-tuned.
 Both endpoints need `Authorization: Bearer <access token>` and only see the caller's own data.
 
 ```http
-POST /v1/scans            {"image_id": "img_..."}     -> 201 scan (Location: /v1/scans/scn_...)
+POST /v1/scans            {"image_id": "img_..."}     -> 202 queued scan (Location: /v1/scans/scn_...)
 GET  /v1/scans/{scan_id}                              -> 200 scan
 ```
 
-`POST` runs synchronously. On a laptop CPU it takes about 25 ms for an upright selfie and about
-0.1 s when a sideways image or an extreme aspect ratio triggers the search passes. The model loads
-once per process, on the first scan, in about 1 s. Before analysis, the stored image is
-**re-validated with the current Phase 4.1 rules**, so only images that pass Phase 4.1 are analyzed.
+`POST` queues the full pipeline in Celery. Poll the returned scan URL; it reports `queued`,
+`running`, `succeeded` or `failed`, with `Retry-After: 1` while pending. Before analysis,
+the worker re-validates the stored image with the current Phase 4.1 rules. The scan page polls
+this endpoint and fills estimate fields when analysis succeeds. See
+[PIPELINE_EVALUATION.md](PIPELINE_EVALUATION.md) for worker setup and evaluation protocol.
 
 | Status | `code` | When |
 |---|---|---|
-| 201 | — | One face found; full scan returned |
-| 422 | `NO_FACE_DETECTED` | No face. Body includes `scan` (status `failed`) |
-| 422 | `MULTIPLE_FACES_DETECTED` | Two or more faces. Body includes `scan` with `face_count` |
-| 422 | `FACE_LANDMARKS_NOT_FOUND` | The detector found a face but the landmarker could not place it |
-| 422 | `IMAGE_QUALITY_FAILED`, `CORRUPT_IMAGE`, ... | The stored image fails current Phase 4.1 rules |
+| 202 | ? | Scan accepted; poll for a terminal status |
+| `failed` | `NO_FACE_DETECTED` | No face was detected |
+| `failed` | `MULTIPLE_FACES_DETECTED` | More than one face was detected |
+| `failed` | `FACE_LANDMARKS_NOT_FOUND` | Detector found a face but could not place landmarks |
+| `failed` | `IMAGE_QUALITY_FAILED`, `CORRUPT_IMAGE`, ... | Stored image failed Phase 4.1 re-validation |
 | 404 | `NOT_FOUND` | Unknown image/scan, or owned by another user |
 | 410 | `UPLOAD_EXPIRED` | Image past its 24 h retention, or its file is gone |
 | 429 | `RATE_LIMITED` | More than 30 scans per user per 10 minutes |
-| 503 | `FACE_ANALYSIS_UNAVAILABLE` | MediaPipe/model not installed (details only in server logs) |
+| `failed` | `FACE_ANALYSIS_UNAVAILABLE` | MediaPipe/model unavailable (details only in server logs) |
 
 Errors are `application/problem+json`. Responses never contain file paths, storage keys, stack
 traces or internal IDs beyond the `img_`/`scn_` IDs the caller already has.

@@ -22,11 +22,12 @@ def bearer(session: dict) -> dict[str, str]:
 @pytest.fixture
 def storage(monkeypatch, tmp_path):
     """Private storage in a temp dir, shared by the upload and scan endpoints."""
-    from app.api import images, scans
+    from app.api import images
+    from app.services import scan_pipeline
 
     settings = Settings(_env_file=None, selfie_storage_dir=tmp_path)
     monkeypatch.setattr(images, "get_settings", lambda: settings)
-    monkeypatch.setattr(scans, "get_settings", lambda: settings)
+    monkeypatch.setattr(scan_pipeline, "get_settings", lambda: settings)
     return tmp_path
 
 
@@ -58,7 +59,7 @@ def test_scan_of_a_valid_selfie(client, signup, storage, face_analyzer):
     image_id = upload(client, auth, (FIXTURES / "portrait.jpg").read_bytes())
 
     response = scan(client, auth, image_id)
-    assert response.status_code == 201, response.text
+    assert response.status_code == 202, response.text
     body = response.json()
     assert body["id"].startswith("scn_") and response.headers["location"] == f"/v1/scans/{body['id']}"
     assert body["image_id"] == image_id and body["status"] == "succeeded" and body["face_count"] == 1
@@ -93,6 +94,31 @@ def test_scan_of_a_valid_selfie(client, signup, storage, face_analyzer):
     assert fetched.status_code == 200 and fetched.json() == body
 
 
+def test_scan_is_queued_and_frontend_can_poll_status(client, signup, storage, monkeypatch, face_analyzer):
+    from types import SimpleNamespace
+
+    from app.api import scans as scans_api
+    from app.services.scan_pipeline import process_face_scan
+
+    monkeypatch.setattr(scans_api.analyze_face_scan, "delay", lambda _scan_id: SimpleNamespace(id="task-id"))
+    _, _, session = signup()
+    auth = bearer(session)
+    image_id = upload(client, auth, (FIXTURES / "portrait.jpg").read_bytes())
+
+    created = scan(client, auth, image_id)
+    assert created.status_code == 202 and created.json()["status"] == "queued"
+    scan_id = created.json()["id"]
+    pending = client.get(f"/v1/scans/{scan_id}", headers=auth)
+    assert pending.status_code == 200 and pending.json()["status"] == "queued"
+    assert pending.headers["retry-after"] == "1"
+
+    outcome = process_face_scan(scan_id)
+    assert outcome["status"] == "succeeded"
+    complete = client.get(f"/v1/scans/{scan_id}", headers=auth)
+    assert complete.json()["status"] == "succeeded"
+    assert complete.json()["processing_time_ms"] >= 0
+
+
 @pytest.mark.parametrize(
     ("content", "code", "faces"),
     [
@@ -106,15 +132,13 @@ def test_rejections_return_problem_with_failed_scan(client, signup, storage, fac
     auth = bearer(session)
     response = scan(client, auth, upload(client, auth, content()))
 
-    assert response.status_code == 422
-    assert response.headers["content-type"] == "application/problem+json"
+    assert response.status_code == 202
     body = response.json()
-    assert body["code"] == code and body["detail"]
-    failed = body["scan"]
+    assert body["status"] == "failed"
+    failed = body
     assert failed["status"] == "failed" and failed["face_count"] == faces
     assert failed["error"]["code"] == code and not {"landmarks", "skin", "attributes"} & set(failed)
-    assert "traceback" not in response.text.lower()
-    # The failed scan is stored and retrievable.
+    # The failed background scan is stored and retrievable.
     assert client.get(f"/v1/scans/{failed['id']}", headers=auth).json()["status"] == "failed"
 
 
@@ -123,15 +147,16 @@ def test_only_images_passing_phase_4_1_are_analyzed(client, signup, storage, mon
     _, _, session = signup()
     auth = bearer(session)
     image_id = upload(client, auth, (FIXTURES / "portrait.jpg").read_bytes())
-    from app.api import scans
+    from app.services import scan_pipeline
 
     strict = Settings(_env_file=None, selfie_storage_dir=storage, selfie_min_width=2000, selfie_min_height=2000)
-    monkeypatch.setattr(scans, "get_settings", lambda: strict)
-    monkeypatch.setattr(scans, "get_face_analyzer", lambda: pytest.fail("analyzer must not run"))
+    monkeypatch.setattr(scan_pipeline, "get_settings", lambda: strict)
+    monkeypatch.setattr(scan_pipeline, "get_face_analyzer", lambda: pytest.fail("analyzer must not run"))
 
     response = scan(client, auth, image_id)
-    assert response.status_code == 422
-    assert response.json()["code"] == "IMAGE_QUALITY_FAILED"
+    assert response.status_code == 202
+    assert response.json()["status"] == "failed"
+    assert response.json()["error"]["code"] == "IMAGE_QUALITY_FAILED"
     assert not response.json()["validation"]["resolution"]["passed"]
 
 
@@ -158,19 +183,39 @@ def test_expired_image(client, signup, storage):
     assert response.status_code == 410 and response.json()["code"] == "UPLOAD_EXPIRED"
 
 
-def test_model_unavailable_is_a_safe_503(client, signup, storage, monkeypatch):
-    from app.api import scans
+def test_model_unavailable_is_reported_safely_by_scan(client, signup, storage, monkeypatch):
+    from app.services import scan_pipeline
     from app.services.face_analysis import FaceModelUnavailable
 
     def unavailable():
         raise FaceModelUnavailable("Face model not found at C:/secret/path/model.task")
 
-    monkeypatch.setattr(scans, "get_face_analyzer", unavailable)
+    monkeypatch.setattr(scan_pipeline, "get_face_analyzer", unavailable)
     _, _, session = signup()
     response = scan(client, bearer(session), upload(client, bearer(session), (FIXTURES / "portrait.jpg").read_bytes()))
+    assert response.status_code == 202
+    assert response.json()["status"] == "failed"
+    assert response.json()["error"]["code"] == "FACE_ANALYSIS_UNAVAILABLE"
+    assert "secret" not in response.text
+
+
+def test_queue_failure_returns_safe_503(client, signup, storage, monkeypatch):
+    from app.api import scans as scans_api
+
+    def unavailable(_scan_id):
+        raise ConnectionError("redis://private-host/internal")
+
+    monkeypatch.setattr(scans_api.analyze_face_scan, "delay", unavailable)
+    _, _, session = signup()
+    auth = bearer(session)
+    image_id = upload(client, auth, (FIXTURES / "portrait.jpg").read_bytes())
+
+    response = scan(client, auth, image_id)
     assert response.status_code == 503
-    assert response.json()["code"] == "FACE_ANALYSIS_UNAVAILABLE"
-    assert "secret" not in response.text and response.headers["retry-after"] == "30"
+    assert response.json()["code"] == "SERVICE_UNAVAILABLE"
+    assert "private-host" not in response.text
+    with SessionLocal() as db:
+        assert db.query(FaceScan).filter_by(image_id=image_id).count() == 0
 
 
 def test_deleting_the_image_deletes_its_scans(client, signup, storage, face_analyzer):
