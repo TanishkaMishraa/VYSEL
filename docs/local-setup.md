@@ -1,4 +1,4 @@
-# Local Development Setup — Parts 2.1 & 2.2
+# Local Development Setup — Parts 2.1–2.5
 
 Everything runs natively. **No Docker.** Follow the section for your OS, then run the connectivity check.
 
@@ -94,10 +94,12 @@ Edit `apps/api/.env` and replace `CHANGE_ME` with the app password:
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg://vysel:YOUR-APP-PASSWORD@localhost:5432/vysel
-REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=redis://localhost:6379/1
-CELERY_RESULT_BACKEND=redis://localhost:6379/2
+REDIS_URL=redis://127.0.0.1:6379/0
+CELERY_BROKER_URL=redis://127.0.0.1:6379/1
+CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/2
 ```
+
+Keep Redis on `127.0.0.1`, not `localhost`. On Windows, `localhost` tries IPv6 first while Memurai listens on IPv4 only, which costs about **2 s per connection** and makes Celery time out.
 
 `.env` is git-ignored, so never commit it. Each teammate keeps their own.
 
@@ -114,7 +116,7 @@ Expected:
 DATABASE_URL = postgresql+psycopg://vysel:***@localhost:5432/vysel
   ✓ PostgreSQL 15.x — database 'vysel' as 'vysel'
   ✓ PostgreSQL write/read round trip
-REDIS_URL = redis://localhost:6379/0
+REDIS_URL = redis://127.0.0.1:6379/0
   ✓ Redis-compatible server 7.x — PING, SET/GET round trip
 
 All services reachable.
@@ -122,12 +124,73 @@ All services reachable.
 
 The write/read check runs in a transaction that is rolled back, so it leaves no data behind.
 
+## 6. Run VYSEL
+
+```powershell
+.\start.ps1                 # Windows   (if scripts are blocked: powershell -ExecutionPolicy Bypass -File .\start.ps1)
+./start.sh                  # macOS / Linux (first time: chmod +x start.sh)
+```
+
+The script runs preflight checks (tools, venv, `node_modules`, `.env`, free ports), checks PostgreSQL and Redis, applies migrations, then starts:
+
+| Service | URL / command | Notes |
+|---|---|---|
+| **api** | <http://localhost:8000/docs> | FastAPI on Uvicorn |
+| **worker** | Celery | Windows uses `--pool=solo` (prefork is unsupported there) |
+| **web** | <http://localhost:3000> | Next.js; proxies `/api/v1/*` → API (same origin) |
+
+Options: `-NoWeb` / `--no-web` runs the backend only. **Ctrl+C** stops all three.
+
+### Verify the whole stack
+
+```powershell
+.\start.ps1 -Check          # ./start.sh --check
+```
+
+This boots everything, runs `apps/api/scripts/smoke_test.py`, then shuts down. The exit code is 0 on success:
+
+```
+✓ health ok — {'database': 'ok', 'cache': 'ok', 'queue': 'ok'}
+✓ job job_… queued
+✓ result from worker 'celery@<your-pc>': Hello, VYSEL!
+✓ /api/v1 proxy reaches FastAPI (same-origin)
+Smoke test passed — all services working together.
+```
+
+**Team checklist (Part 2.5):** each teammate runs `start.ps1 -Check` / `start.sh --check` on their own laptop and posts the final line in the team chat.
+
+### Backend endpoints so far
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/health` | DB, cache and queue status; `503` if any is down |
+| POST | `/v1/jobs/hello` | Queue the hello-world task → `202` + `Location` |
+| GET | `/v1/jobs/{id}` | Job status (`queued → running → succeeded/failed`), read from PostgreSQL |
+
+### Everyday commands (from `apps/api`, venv active)
+
+```bash
+pytest                                        # tests (SQLite + eager Celery; set TEST_DATABASE_URL for PostgreSQL)
+ruff check . && ruff format --check .         # lint
+alembic revision --autogenerate -m "add x"    # new migration after changing app/models.py
+alembic upgrade head                          # apply migrations
+```
+
+## 7. CI (GitHub Actions)
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, with no Docker:
+
+- **API job:** ruff, then PostgreSQL (preinstalled on the runner) plus Redis (apt), then migration round trip and `alembic check`, then pytest against PostgreSQL, then a live smoke test (Uvicorn + Celery).
+- **Web job:** Node 20, `npm ci`, design-system checks, type-check, `next build`.
+
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
 | `connection refused` on 5432 | Start PostgreSQL: Windows `Start-Service postgresql-x64-15` (elevated) · macOS `brew services start postgresql@15` · Linux `sudo systemctl start postgresql` |
 | `password authentication failed for user "vysel"` | Re-run step 3 with the password that's in your `.env` |
+| Jobs stay `queued`, smoke test "timed out" | Worker not running, or Redis URL uses `localhost` on Windows; use `127.0.0.1` |
+| `Port 8000/3000 is in use` | Another dev server is running; stop it, or use `-NoWeb` if it's your own `next dev` |
 | `Error 10061` / refused on 6379 | Start Redis: Windows `Start-Service Memurai` · macOS `brew services start redis` · Linux `sudo systemctl start redis-server` |
 | Memurai stopped after ~10 days | Expected on the free Developer edition; restart the service |
 | `python3.11: not found` | Use `py -3.11` on Windows, or install 3.11 as above |

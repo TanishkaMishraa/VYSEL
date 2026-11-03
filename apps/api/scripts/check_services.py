@@ -51,7 +51,8 @@ def check_postgres(url: str) -> None:
         conn.execute(text("CREATE TEMP TABLE vysel_healthcheck (id text PRIMARY KEY)"))
         token = uuid.uuid4().hex
         conn.execute(text("INSERT INTO vysel_healthcheck VALUES (:t)"), {"t": token})
-        assert conn.execute(text("SELECT id FROM vysel_healthcheck")).scalar_one() == token
+        if conn.execute(text("SELECT id FROM vysel_healthcheck")).scalar_one() != token:
+            raise RuntimeError("read-back value did not match what was written")
         conn.rollback()
         print("  ✓ PostgreSQL write/read round trip")
     engine.dispose()
@@ -59,11 +60,13 @@ def check_postgres(url: str) -> None:
 
 def check_redis(url: str) -> None:
     client = redis.Redis.from_url(url, socket_connect_timeout=3)
-    assert client.ping()
+    if not client.ping():
+        raise RuntimeError("PING returned false")
     info = client.info("server")
     key = f"vysel:healthcheck:{uuid.uuid4().hex}"
     client.set(key, "ok", ex=10)
-    assert client.get(key) == b"ok"
+    if client.get(key) != b"ok":
+        raise RuntimeError("GET did not return the value just SET")
     client.delete(key)
     print(f"  ✓ Redis-compatible server {info.get('redis_version')} — PING, SET/GET round trip")
 

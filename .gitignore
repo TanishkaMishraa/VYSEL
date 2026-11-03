@@ -13,3 +13,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
+
+# Local run logs (start scripts)
+.logs/

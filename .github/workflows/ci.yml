@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API — lint, migrate, test, smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      # No Docker: the runner's preinstalled PostgreSQL and an apt-installed Redis.
+      DATABASE_URL: postgresql+psycopg://vysel:ci-password@localhost:5432/vysel
+      TEST_DATABASE_URL: postgresql+psycopg://vysel:ci-password@localhost:5432/vysel_test
+      REDIS_URL: redis://127.0.0.1:6379/0
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/1
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/api/requirements*.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Start PostgreSQL and Redis
+        run: |
+          sudo systemctl start postgresql.service
+          sudo apt-get update -qq && sudo apt-get install -y -qq redis-server
+          sudo systemctl start redis-server
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -v app_password=ci-password -f scripts/create_db.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE vysel_test OWNER vysel"
+          python scripts/check_services.py
+
+      - name: Migrate (upgrade, round-trip, drift check)
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          alembic check
+
+      - name: Tests (pytest against PostgreSQL)
+        run: pytest
+
+      - name: Smoke test (live API + Celery worker)
+        run: |
+          uvicorn app.main:app --port 8000 > /tmp/api.log 2>&1 &
+          celery -A app.worker worker --loglevel=INFO --concurrency=1 > /tmp/worker.log 2>&1 &
+          python scripts/smoke_test.py --timeout 60
+
+      - name: Service logs
+        if: failure()
+        run: tail -n 100 /tmp/api.log /tmp/worker.log || true
+
+  web:
+    name: Web — design system, types, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - name: Design system checks (tokens, contrast, brand sync)
+        run: npm run ds:validate
+      - name: Type-check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

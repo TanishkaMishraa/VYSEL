@@ -1,0 +1,24 @@
+[project]
+name = "vysel-api"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
+ignore = ["B008"]  # FastAPI's Depends() in defaults is idiomatic
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest works
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+known-third-party = ["alembic"]  # the local alembic/ folder is migrations, not our package

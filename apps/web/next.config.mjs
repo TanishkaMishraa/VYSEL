@@ -4,6 +4,12 @@ const nextConfig = {
   poweredByHeader: false,
   // @vysel/ui ships TypeScript source; compile it with the app.
   transpilePackages: ['@vysel/ui'],
+  // Same-origin proxy to FastAPI: the browser only ever talks to this app, so no CORS
+  // and auth cookies stay first-party. API_URL defaults to the local Uvicorn server.
+  async rewrites() {
+    const api = process.env.API_URL ?? 'http://localhost:8000';
+    return [{ source: '/api/v1/:path*', destination: `${api}/v1/:path*` }];
+  },
   async headers() {
     return [
       {
