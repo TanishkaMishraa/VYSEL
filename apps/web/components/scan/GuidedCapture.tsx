@@ -7,11 +7,21 @@ import { getFaceLandmarker } from '@/lib/tryon/faceLandmarker';
 type Pose = { yaw: number; pitch: number; roll: number; size: number; centered: boolean };
 type Step = 'straight' | 'left' | 'right' | 'up' | 'down';
 const STEPS: Step[] = ['straight', 'left', 'right', 'up', 'down'];
-function configuredAngle(name: string, fallback: number): number {
-  const value = Number(process.env[`NEXT_PUBLIC_FACE_GUIDE_${name}_DEGREES`]);
+function configuredAngle(rawValue: string | undefined, fallback: number): number {
+  const value = Number(rawValue);
   return Number.isFinite(value) && value > 0 && value <= 45 ? value : fallback;
 }
-const THRESHOLDS = { yaw: configuredAngle('YAW', 9), pitch: configuredAngle('PITCH', 4), roll: configuredAngle('ROLL', 12), minFaceWidth: 0.22, maxFaceWidth: 0.72, centerTolerance: 0.2, minBrightness: 35, maxBrightness: 225, minSharpness: 18 };
+const THRESHOLDS = {
+  yaw: configuredAngle(process.env.NEXT_PUBLIC_FACE_GUIDE_YAW_DEGREES, 9),
+  pitch: configuredAngle(process.env.NEXT_PUBLIC_FACE_GUIDE_PITCH_DEGREES, 4),
+  roll: configuredAngle(process.env.NEXT_PUBLIC_FACE_GUIDE_ROLL_DEGREES, 12),
+  minFaceWidth: 0.22,
+  maxFaceWidth: 0.72,
+  centerTolerance: 0.2,
+  minBrightness: 35,
+  maxBrightness: 225,
+  minSharpness: 18,
+};
 const LABELS: Record<Step, string> = { straight: 'Look straight at the camera', left: 'Turn your head to your left', right: 'Turn your head to your right', up: 'Tilt your chin upward', down: 'Tilt your chin downward' };
 
 function shuffleSteps(): Step[] {
@@ -106,7 +116,7 @@ export function GuidedCapture({ onCapture, onCancel }: { onCapture: (file: File)
           const qc = canvas.current;
           const qctx = qc?.getContext('2d', { willReadFrequently: true });
           if (qc && qctx) {
-            qc.width = 80; qc.height = 60;
+            if (qc.width !== 80 || qc.height !== 60) { qc.width = 80; qc.height = 60; }
             qctx.drawImage(element, 0, 0, 80, 60);
             const pixels = qctx.getImageData(0, 0, 80, 60).data;
             const gray = new Float32Array(80 * 60);
