@@ -14,6 +14,8 @@ DEFAULT_CODES = {
     403: "FORBIDDEN",
     404: "NOT_FOUND",
     409: "CONFLICT",
+    413: "PAYLOAD_TOO_LARGE",
+    415: "UNSUPPORTED_MEDIA_TYPE",
     422: "VALIDATION_ERROR",
     429: "RATE_LIMITED",
     503: "SERVICE_UNAVAILABLE",
@@ -23,8 +25,16 @@ DEFAULT_CODES = {
 class ApiError(Exception):
     """Raise from handlers: `raise ApiError(404, "NOT_FOUND", "Job not found")`."""
 
-    def __init__(self, status: int, code: str, detail: str | None = None, retry_after: int | None = None) -> None:
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        detail: str | None = None,
+        retry_after: int | None = None,
+        **extra,
+    ) -> None:
         self.status, self.code, self.detail, self.retry_after = status, code, detail, retry_after
+        self.extra = extra
 
 
 def problem(request: Request, status: int, code: str, detail: str | None = None, **extra) -> JSONResponse:
@@ -43,7 +53,7 @@ def problem(request: Request, status: int, code: str, detail: str | None = None,
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError):
-        response = problem(request, exc.status, exc.code, exc.detail)
+        response = problem(request, exc.status, exc.code, exc.detail, **exc.extra)
         if exc.retry_after:
             response.headers["Retry-After"] = str(exc.retry_after)
         return response

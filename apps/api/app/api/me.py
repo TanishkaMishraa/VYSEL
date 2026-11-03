@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app import schemas
 from app.db import get_db, utcnow
 from app.deps import current_user
-from app.models import User, UserPreferences
+from app.models import ImageUpload, User, UserPreferences
 from app.services import auth as sessions
+from app.services.image_storage import delete_image
 
 router = APIRouter(prefix="/me", tags=["Profile"])
 
@@ -45,6 +46,10 @@ def update_me(body: schemas.ProfileUpdate, user: User = Depends(current_user), d
 @router.delete("", status_code=204)
 def delete_me(response: Response, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Erase the account; sessions, tokens, links and preferences cascade."""
+    from app.config import get_settings
+
+    for image in db.query(ImageUpload).filter_by(user_id=user.id).all():
+        delete_image(get_settings().selfie_storage_dir, image.storage_key)
     db.delete(user)
     db.commit()
     sessions.clear_refresh_cookie(response)

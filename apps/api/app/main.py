@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import auth, health, jobs, me
+from app.api import auth, health, images, jobs, me
 from app.config import get_settings
 from app.errors import register_error_handlers
 
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs.router, prefix="/v1")
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
+    app.include_router(images.router, prefix="/v1")
     return app
 
 

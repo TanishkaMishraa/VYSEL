@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 API_DIR = Path(__file__).resolve().parents[1]
@@ -40,6 +40,21 @@ class Settings(BaseSettings):
     cookie_secure: bool = False  # True in production (HTTPS)
     rate_limit_enabled: bool = True
 
+    # Private local storage and rule-based selfie validation.
+    selfie_storage_dir: Path = API_DIR / ".private" / "selfies"
+    selfie_max_file_size_bytes: int = Field(default=5 * 1024 * 1024, gt=0)
+    selfie_min_width: int = Field(default=256, ge=1)
+    selfie_min_height: int = Field(default=256, ge=1)
+    selfie_max_width: int = Field(default=8192, ge=256)
+    selfie_max_height: int = Field(default=8192, ge=256)
+    selfie_max_pixels: int = Field(default=40_000_000, ge=65_536)
+    selfie_min_blur_variance: float = Field(default=35.0, ge=0)
+    selfie_min_brightness: float = Field(default=35.0, ge=0, le=255)
+    selfie_max_brightness: float = Field(default=225.0, ge=0, le=255)
+    selfie_max_dark_pixel_ratio: float = Field(default=0.75, ge=0, le=1)
+    selfie_max_bright_pixel_ratio: float = Field(default=0.75, ge=0, le=1)
+    selfie_upload_chunk_bytes: int = Field(default=64 * 1024, ge=1024)
+
     # ── Google OAuth (optional — the button hides itself when unset) ──
     google_client_id: str = ""
     google_client_secret: str = ""
@@ -54,6 +69,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _production_safety(self) -> "Settings":
+        if self.selfie_min_brightness > self.selfie_max_brightness:
+            raise ValueError("SELFIE_MIN_BRIGHTNESS must be <= SELFIE_MAX_BRIGHTNESS")
+        if self.selfie_min_width > self.selfie_max_width or self.selfie_min_height > self.selfie_max_height:
+            raise ValueError("Selfie minimum dimensions must not exceed maximum dimensions")
         if self.app_env == "production":
             if self.jwt_secret == INSECURE_DEV_SECRET or len(self.jwt_secret) < 32:
                 raise ValueError("JWT_SECRET must be set to a random value of 32+ characters in production")

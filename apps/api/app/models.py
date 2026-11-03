@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, TimestampMixin, utcnow
@@ -122,3 +122,24 @@ class UserPreferences(TimestampMixin, Base):
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="preferences")
+
+
+class ImageUpload(TimestampMixin, Base):
+    """Accepted selfie metadata. Image bytes stay in private storage under opaque keys."""
+
+    __tablename__ = "image_uploads"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=prefixed_id("img"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    storage_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    filename: Mapped[str] = mapped_column(String(128), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    blur_variance: Mapped[float] = mapped_column(Float, nullable=False)
+    mean_brightness: Mapped[float] = mapped_column(Float, nullable=False)
+    validation_results: Mapped[dict] = mapped_column(JSON, nullable=False)
+    consent_policy_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    retention: Mapped[str] = mapped_column(String(16), default="ephemeral", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -251,31 +251,26 @@ paths:
   /images:
     post:
       tags: [Images]
-      operationId: createImageUpload
-      summary: Create an upload intent and get a presigned upload URL
+      operationId: uploadImage
+      summary: Upload and validate a selfie image
       description: |
-        Step 1 of 2. Records explicit consent, reserves an image ID and returns a
-        short-lived (5 min) presigned `PUT` URL. The client uploads the bytes
-        **directly to object storage** — they never pass through the API — then calls
-        `POST /images/{image_id}/complete`.
-
-        The signature binds `Content-Type` and `Content-Length`, so the upload must
-        match the declared `content_type` and `size_bytes` exactly.
+        Authenticated multipart upload. Submit one file, explicit processing consent,
+        and the consent policy version. The API checks file type, dimensions, readability,
+        blur and exposure before storing accepted images in private storage.
       requestBody:
         required: true
         content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateImageRequest' }
-            example:
-              content_type: image/jpeg
-              size_bytes: 482113
-              retention: ephemeral
-              consent:
-                image_processing: true
-                policy_version: '2026-11-01'
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, consent, policy_version]
+              properties:
+                file: { type: string, format: binary, description: JPG/JPEG or PNG, up to 5 MiB. }
+                consent: { type: boolean, description: Explicit consent to process this image. }
+                policy_version: { type: string, minLength: 1, maxLength: 32 }
       responses:
         '201':
-          description: Upload intent created.
+          description: Image passed validation and was stored.
           headers:
             Location:
               description: URL of the new image resource.
@@ -283,24 +278,21 @@ paths:
               example: /v1/images/img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ImageUploadIntent' }
-              example:
-                image:
-                  id: img_01JC3Y8M2Q7W4B9T6N5R0KXH2D
-                  status: pending_upload
-                  content_type: image/jpeg
-                  size_bytes: 482113
-                  width: null
-                  height: null
-                  retention: ephemeral
-                  expires_at: '2026-11-03T10:05:00Z'
-                  created_at: '2026-11-03T10:00:00Z'
-                upload:
-                  method: PUT
-                  url: https://uploads.vysel.app/selfies/usr_01JC3X/img_01JC3Y8M2Q7W4B9T6N5R0KXH2D?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=…
-                  headers:
-                    Content-Type: image/jpeg
-                  expires_at: '2026-11-03T10:05:00Z'
+              schema:
+                type: object
+                required: [image, validation]
+                properties:
+                  image: { $ref: '#/components/schemas/Image' }
+                  validation:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      required: [passed, value, threshold, message]
+                      properties:
+                        passed: { type: boolean }
+                        value: { type: [string, number, integer] }
+                        threshold: { type: [string, number, integer] }
+                        message: { type: string }
         '400':
           description: Consent was not given.
           content:
@@ -315,7 +307,8 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '422': { $ref: '#/components/responses/ValidationError' }
+        '422':
+          description: Image quality checks failed; see validation_errors and per-check results.
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /images/{image_id}:
@@ -347,48 +340,6 @@ paths:
         '204': { description: Deleted. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
-
-  /images/{image_id}/complete:
-    parameters:
-      - $ref: '#/components/parameters/ImageId'
-    post:
-      tags: [Images]
-      operationId: completeImageUpload
-      summary: Confirm the upload finished
-      description: |
-        Step 2 of 2. The API checks the object exists in storage and that its size and
-        content type match the intent. Deep checks (magic bytes, decode, face quality)
-        happen in the worker during analysis. Idempotent once `uploaded`.
-      responses:
-        '200':
-          description: Upload confirmed.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Image' }
-              examples:
-                uploaded: { $ref: '#/components/examples/ImageUploaded' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409':
-          description: Object missing, mismatched, or the upload window expired.
-          content:
-            application/problem+json:
-              schema: { $ref: '#/components/schemas/Problem' }
-              examples:
-                missing:
-                  value:
-                    type: https://docs.vysel.app/errors/upload-incomplete
-                    title: Upload not found
-                    status: 409
-                    code: UPLOAD_INCOMPLETE
-                    detail: No object was found for this image. Upload the file, then retry.
-                expired:
-                  value:
-                    type: https://docs.vysel.app/errors/upload-expired
-                    title: Upload window expired
-                    status: 409
-                    code: UPLOAD_EXPIRED
-                    detail: Create a new upload intent and try again.
 
   # ─────────────────────────────── Analyses ───────────────────────────────
   /analyses:
